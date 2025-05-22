@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
 
@@ -55,15 +56,15 @@ void cmdType(char *arg)
     printf("%s: not found\n", arg);
 }
 
-char **splitCommandLine(char *input, int *argCount)
+char **splitCommandLine(char *input)
 {
-    *argCount = 0;
+    int count = 0;
     int capacity = 0;
     char **result = NULL;
     char *current = strtok(input, " \t\n\r");
     while (current != NULL)
     {
-        if (capacity < *argCount + 1)
+        if (capacity < count + 1)
         {
             capacity = capacity == 0 ? 8 : capacity * 2;
             result = realloc(result, sizeof(char *) * capacity);
@@ -75,20 +76,51 @@ char **splitCommandLine(char *input, int *argCount)
         int length = strlen(current) + 1;
         char *arg = malloc(sizeof(char) * length);
         snprintf(arg, length, "%s", current);
-        result[*argCount] = arg;
-        *argCount += 1;
+        result[count++] = arg;
         current = strtok(NULL, " \t\n\r");
     }
+    if (count == 0)
+    {
+        return NULL;
+    }
+    if (capacity < count + 1)
+    {
+        capacity++;
+        result = realloc(result, sizeof(char *) * capacity);
+        if (result == NULL)
+        {
+            exit(EXIT_FAILURE);
+        }
+    }
+    result[count++] = NULL;
     return result;
 }
 
-void freeArrayAndElements(char **array, int size)
+void freeArrayAndElements(char **array)
 {
-    for (int i = 0; i < size; i++)
+    for (int i = 1; array[i] != NULL; i++)
     {
         free(array[i]);
     }
     free(array);
+}
+
+void runCmd(char *cmd, char **args)
+{
+    int pid = fork();
+    if (pid == 0)
+    {
+        execvp(cmd, args);
+    }
+    else if (pid > 0)
+    {
+        int status;
+        waitpid(pid, &status, WUNTRACED);
+    }
+    else
+    {
+        exit(EXIT_FAILURE);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -105,24 +137,23 @@ int main(int argc, char *argv[])
         {
             break;
         }
-        int argCount = 0;
-        char **args = splitCommandLine(input, &argCount);
-        if (argCount == 0)
+        char **args = splitCommandLine(input);
+        if (args == NULL)
         {
             continue;
         }
         char *cmd = args[0];
-        for (int i = 0; i < argCount; i++)
-        {
-            printf("%d: %s\n", i, args[i]);
-        }
+        // for (int i = 0; args[i] != NULL; i++)
+        // {
+        //     printf("%d: %s\n", i, args[i]);
+        // }
         if (strcmp(cmd, "exit") == 0)
         {
             break;
         }
         else if (strcmp(cmd, "echo") == 0)
         {
-            for (int i = 1; i < argCount; i++)
+            for (int i = 1; args[i] != NULL; i++)
             {
                 printf("%s ", args[i]);
             }
@@ -130,16 +161,24 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(cmd, "type") == 0)
         {
-            if (argCount > 1)
+            if (args[1] != NULL)
             {
                 cmdType(args[1]);
             }
         }
         else
         {
-            printf("%s: command not found\n", cmd);
+            char *fullPath = pathLookup(cmd);
+            if (fullPath != NULL)
+            {
+                runCmd(cmd, args);
+            }
+            else
+            {
+                printf("%s: command not found\n", cmd);
+            }
         }
-        freeArrayAndElements(args, argCount);
+        freeArrayAndElements(args);
     }
     return 0;
 }
