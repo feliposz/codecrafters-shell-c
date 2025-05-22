@@ -55,6 +55,42 @@ void cmdType(char *arg)
     printf("%s: not found\n", arg);
 }
 
+char **splitCommandLine(char *input, int *argCount)
+{
+    *argCount = 0;
+    int capacity = 0;
+    char **result = NULL;
+    char *current = strtok(input, " \t\n\r");
+    while (current != NULL)
+    {
+        if (capacity < *argCount + 1)
+        {
+            capacity = capacity == 0 ? 8 : capacity * 2;
+            result = realloc(result, sizeof(char *) * capacity);
+            if (result == NULL)
+            {
+                exit(EXIT_FAILURE);
+            }
+        }
+        int length = strlen(current) + 1;
+        char *arg = malloc(sizeof(char) * length);
+        snprintf(arg, length, "%s", current);
+        result[*argCount] = arg;
+        *argCount += 1;
+        current = strtok(NULL, " \t\n\r");
+    }
+    return result;
+}
+
+void freeArrayAndElements(char **array, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        free(array[i]);
+    }
+    free(array);
+}
+
 int main(int argc, char *argv[])
 {
     // Flush after every printf
@@ -69,34 +105,41 @@ int main(int argc, char *argv[])
         {
             break;
         }
-        input[strlen(input) - 1] = '\0';
-        char *cmd = strtok(input, " \t");
+        int argCount = 0;
+        char **args = splitCommandLine(input, &argCount);
+        if (argCount == 0)
+        {
+            continue;
+        }
+        char *cmd = args[0];
+        for (int i = 0; i < argCount; i++)
+        {
+            printf("%d: %s\n", i, args[i]);
+        }
         if (strcmp(cmd, "exit") == 0)
         {
             break;
         }
         else if (strcmp(cmd, "echo") == 0)
         {
-            char *arg = strtok(NULL, " \t");
-            while (arg != NULL)
+            for (int i = 1; i < argCount; i++)
             {
-                printf("%s ", arg);
-                arg = strtok(NULL, " \t");
+                printf("%s ", args[i]);
             }
             printf("\n");
         }
         else if (strcmp(cmd, "type") == 0)
         {
-            char *arg = strtok(NULL, " \t");
-            if (arg != NULL)
+            if (argCount > 1)
             {
-                cmdType(arg);
+                cmdType(args[1]);
             }
         }
         else
         {
             printf("%s: command not found\n", cmd);
         }
+        freeArrayAndElements(args, argCount);
     }
     return 0;
 }
