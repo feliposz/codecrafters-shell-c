@@ -8,8 +8,12 @@
 
 char *pathLookup(char *name)
 {
-    static char fullPath[256];
+    char fullPath[256];
     char *path = getenv("PATH");
+    if (path == NULL)
+    {
+        return NULL;
+    }
     for (;;)
     {
         char *separator = strchr(path, ':');
@@ -18,10 +22,17 @@ char *pathLookup(char *name)
         {
             break;
         }
-        snprintf(fullPath, ARRAY_LENGTH(fullPath), "%.*s/%s", pathLen, path, name);
+        int fullPathLen = snprintf(fullPath, ARRAY_LENGTH(fullPath), "%.*s/%s", pathLen, path, name);
         if (access(fullPath, F_OK) == 0)
         {
-            return fullPath;
+            char *result = malloc(fullPathLen + 1);
+            if (result == NULL)
+            {
+                perror("malloc");
+                return NULL;
+            }
+            snprintf(result, fullPathLen + 1, "%s", fullPath);
+            return result;
         }
         if (separator == NULL)
         {
@@ -51,6 +62,7 @@ void cmdType(char *arg)
     if (fullPath != NULL)
     {
         printf("%s is %s\n", arg, fullPath);
+        free(fullPath);
         return;
     }
     printf("%s: not found\n", arg);
@@ -98,7 +110,7 @@ char **splitCommandLine(char *input)
 
 void freeArrayAndElements(char **array)
 {
-    for (int i = 1; array[i] != NULL; i++)
+    for (int i = 0; array[i] != NULL; i++)
     {
         free(array[i]);
     }
@@ -110,7 +122,9 @@ void runCmd(char *cmd, char **args)
     int pid = fork();
     if (pid == 0)
     {
-        execvp(cmd, args);
+        execv(cmd, args);
+        perror("execv");
+        _exit(EXIT_FAILURE); // child should not return
     }
     else if (pid > 0)
     {
@@ -119,7 +133,7 @@ void runCmd(char *cmd, char **args)
     }
     else
     {
-        exit(EXIT_FAILURE);
+        perror("fork");
     }
 }
 
@@ -171,7 +185,8 @@ int main(int argc, char *argv[])
             char *fullPath = pathLookup(cmd);
             if (fullPath != NULL)
             {
-                runCmd(cmd, args);
+                runCmd(fullPath, args);
+                free(fullPath);
             }
             else
             {
