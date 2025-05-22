@@ -1,8 +1,35 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
+
+char *pathLookup(char *name)
+{
+    static char fullPath[256];
+    char *path = getenv("PATH");
+    for (;;)
+    {
+        char *separator = strchr(path, ':');
+        int pathLen = separator != NULL ? separator - path : strlen(path);
+        if (pathLen == 0)
+        {
+            break;
+        }
+        snprintf(fullPath, ARRAY_LENGTH(fullPath), "%.*s/%s", pathLen, path, name);
+        if (access(fullPath, F_OK) == 0)
+        {
+            return fullPath;
+        }
+        if (separator == NULL)
+        {
+            break;
+        }
+        path = separator + 1;
+    }
+    return NULL;
+}
 
 void cmdType(char *arg)
 {
@@ -18,6 +45,12 @@ void cmdType(char *arg)
             printf("%s is a shell builtin\n", arg);
             return;
         }
+    }
+    char *fullPath = pathLookup(arg);
+    if (fullPath != NULL)
+    {
+        printf("%s is %s\n", arg, fullPath);
+        return;
     }
     printf("%s: not found\n", arg);
 }
