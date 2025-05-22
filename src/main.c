@@ -2,6 +2,26 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
+
+void cmdType(char *arg)
+{
+    char *builtins[] = {
+        "exit",
+        "echo",
+        "type",
+    };
+    for (int i = 0; i < ARRAY_LENGTH(builtins); i++)
+    {
+        if (strcmp(arg, builtins[i]) == 0)
+        {
+            printf("%s is a shell builtin\n", arg);
+            return;
+        }
+    }
+    printf("%s: not found\n", arg);
+}
+
 int main(int argc, char *argv[])
 {
     // Flush after every printf
@@ -31,6 +51,14 @@ int main(int argc, char *argv[])
                 arg = strtok(NULL, " \t");
             }
             printf("\n");
+        }
+        else if (strcmp(cmd, "type") == 0)
+        {
+            char *arg = strtok(NULL, " \t");
+            if (arg != NULL)
+            {
+                cmdType(arg);
+            }
         }
         else
         {
