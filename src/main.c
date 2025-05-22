@@ -22,7 +22,20 @@ int main(int argc, char *argv[])
         {
             break;
         }
-        printf("%s: command not found\n", cmd);
+        else if (strcmp(cmd, "echo") == 0)
+        {
+            char *arg = strtok(NULL, " \t");
+            while (arg != NULL)
+            {
+                printf("%s ", arg);
+                arg = strtok(NULL, " \t");
+            }
+            printf("\n");
+        }
+        else
+        {
+            printf("%s: command not found\n", cmd);
+        }
     }
     return 0;
 }
