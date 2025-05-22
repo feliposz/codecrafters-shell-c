@@ -17,7 +17,12 @@ int main(int argc, char *argv[])
             break;
         }
         input[strlen(input) - 1] = '\0';
-        printf("%s: command not found\n", input);
+        char *cmd = strtok(input, " \t");
+        if (strcmp(cmd, "exit") == 0)
+        {
+            break;
+        }
+        printf("%s: command not found\n", cmd);
     }
     return 0;
 }
