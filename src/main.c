@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
 #define MAX_PATH_LENGTH 1024
@@ -52,6 +53,7 @@ void cmdType(char *arg)
         "echo",
         "type",
         "pwd",
+        "cd",
     };
     for (int i = 0; i < ARRAY_LENGTH(builtins); i++)
     {
@@ -188,6 +190,17 @@ int main(int argc, char *argv[])
             char currentDir[MAX_PATH_LENGTH];
             getcwd(currentDir, MAX_PATH_LENGTH);
             printf("%s\n", currentDir);
+        }
+        else if (strcmp(cmd, "cd") == 0)
+        {
+            char *path = args[1];
+            if (path != NULL)
+            {
+                if (chdir(args[1]) != 0)
+                {
+                    printf("cd: %s: %s\n", path, strerror(errno));
+                }
+            }
         }
         else
         {
