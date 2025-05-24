@@ -196,7 +196,12 @@ int main(int argc, char *argv[])
             char *path = args[1];
             if (path != NULL)
             {
-                if (chdir(args[1]) != 0)
+                if (strcmp("~", path) == 0)
+                {
+                    char *envHome = getenv("HOME");
+                    path = envHome != NULL ? envHome : path;
+                }
+                if (chdir(path) != 0)
                 {
                     printf("cd: %s: %s\n", path, strerror(errno));
                 }
