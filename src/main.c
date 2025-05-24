@@ -5,10 +5,12 @@
 #include <sys/wait.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
+#define MAX_PATH_LENGTH 1024
+#define MAX_INPUT 1024
 
 char *pathLookup(char *name)
 {
-    char fullPath[256];
+    char fullPath[MAX_PATH_LENGTH];
     char *path = getenv("PATH");
     if (path == NULL)
     {
@@ -22,7 +24,7 @@ char *pathLookup(char *name)
         {
             break;
         }
-        int fullPathLen = snprintf(fullPath, ARRAY_LENGTH(fullPath), "%.*s/%s", pathLen, path, name);
+        int fullPathLen = snprintf(fullPath, MAX_PATH_LENGTH, "%.*s/%s", pathLen, path, name);
         if (access(fullPath, F_OK) == 0)
         {
             char *result = malloc(fullPathLen + 1);
@@ -49,6 +51,7 @@ void cmdType(char *arg)
         "exit",
         "echo",
         "type",
+        "pwd",
     };
     for (int i = 0; i < ARRAY_LENGTH(builtins); i++)
     {
@@ -142,11 +145,11 @@ int main(int argc, char *argv[])
     // Flush after every printf
     setbuf(stdout, NULL);
 
-    char input[100];
+    char input[MAX_INPUT];
     for (;;)
     {
         printf("$ ");
-        fgets(input, 100, stdin);
+        fgets(input, MAX_INPUT, stdin);
         if (feof(stdin))
         {
             break;
@@ -179,6 +182,12 @@ int main(int argc, char *argv[])
             {
                 cmdType(args[1]);
             }
+        }
+        else if (strcmp(cmd, "pwd") == 0)
+        {
+            char currentDir[MAX_PATH_LENGTH];
+            getcwd(currentDir, MAX_PATH_LENGTH);
+            printf("%s\n", currentDir);
         }
         else
         {
