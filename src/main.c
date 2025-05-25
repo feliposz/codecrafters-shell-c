@@ -86,6 +86,24 @@ char **splitCommandLine(char *input)
     for (;;)
     {
         bool addToken = false;
+        if (cur[0] == '\'')
+        {
+            do
+            {
+                cur++; // opening '
+                while (cur[0] != '\'' && cur[0] != '\0')
+                {
+                    token[length++] = cur[0];
+                    cur++;
+                }
+                if (cur[0] == '\0')
+                {
+                    printf("unmatched '\n");
+                    return NULL;
+                }
+                cur++; // closing '
+            } while (cur[0] == '\''); // handle concatenation
+        }
         if (isspace(cur[0]))
         {
             addToken = true;
@@ -94,11 +112,7 @@ char **splitCommandLine(char *input)
                 cur++;
             }
         }
-        if (cur[0] == '\0')
-        {
-            addToken = true;
-        }
-        if (addToken)
+        if (addToken || cur[0] == '\0')
         {
             if (capacity < count + 1)
             {
