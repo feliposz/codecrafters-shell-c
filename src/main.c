@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <ctype.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
@@ -78,23 +80,49 @@ char **splitCommandLine(char *input)
     int count = 0;
     int capacity = 0;
     char **result = NULL;
-    char *current = strtok(input, " \t\n\r");
-    while (current != NULL)
+    char token[MAX_INPUT];
+    int length = 0;
+    char *cur = input;
+    for (;;)
     {
-        if (capacity < count + 1)
+        bool addToken = false;
+        if (isspace(cur[0]))
         {
-            capacity = capacity == 0 ? 8 : capacity * 2;
-            result = realloc(result, sizeof(char *) * capacity);
-            if (result == NULL)
+            addToken = true;
+            while (isspace(cur[0]))
             {
-                exit(EXIT_FAILURE);
+                cur++;
             }
         }
-        int length = strlen(current) + 1;
-        char *arg = malloc(sizeof(char) * length);
-        snprintf(arg, length, "%s", current);
-        result[count++] = arg;
-        current = strtok(NULL, " \t\n\r");
+        if (cur[0] == '\0')
+        {
+            addToken = true;
+        }
+        if (addToken)
+        {
+            if (capacity < count + 1)
+            {
+                capacity = capacity == 0 ? 8 : capacity * 2;
+                result = realloc(result, sizeof(char *) * capacity);
+                if (result == NULL)
+                {
+                    exit(EXIT_FAILURE);
+                }
+            }
+            char *arg = malloc(length + 1);
+            snprintf(arg, length + 1, "%s", token);
+            result[count++] = arg;
+            length = 0;
+            if (cur[0] == '\0')
+            {
+                break;
+            }
+        }
+        else
+        {
+            token[length++] = cur[0];
+            cur++;
+        }
     }
     if (count == 0)
     {
