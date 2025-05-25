@@ -88,21 +88,38 @@ char **splitCommandLine(char *input)
         bool addToken = false;
         if (cur[0] == '\'')
         {
-            do
+            cur++; // opening '
+            while (cur[0] != '\'' && cur[0] != '\0')
             {
-                cur++; // opening '
-                while (cur[0] != '\'' && cur[0] != '\0')
-                {
-                    token[length++] = cur[0];
-                    cur++;
-                }
-                if (cur[0] == '\0')
-                {
-                    printf("unmatched '\n");
-                    return NULL;
-                }
-                cur++; // closing '
-            } while (cur[0] == '\''); // handle concatenation
+                token[length++] = cur[0];
+                cur++;
+            }
+            if (cur[0] == '\0')
+            {
+                printf("unmatched '\n");
+                return NULL;
+            }
+            cur++; // closing '
+        }
+        else if (cur[0] == '"')
+        {
+            cur++; // opening '
+            while (cur[0] != '"' && cur[0] != '\0')
+            {
+                token[length++] = cur[0];
+                cur++;
+            }
+            if (cur[0] == '\0')
+            {
+                printf("unmatched \"\n");
+                return NULL;
+            }
+            cur++; // closing '
+        }
+        else if (!isspace(cur[0]) && cur[0] != '\0')
+        {
+            token[length++] = cur[0];
+            cur++;
         }
         if (isspace(cur[0]))
         {
@@ -131,11 +148,6 @@ char **splitCommandLine(char *input)
             {
                 break;
             }
-        }
-        else
-        {
-            token[length++] = cur[0];
-            cur++;
         }
     }
     if (count == 0)
