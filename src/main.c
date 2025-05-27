@@ -243,6 +243,16 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
             *out = fopen(args[i + 1], "w");
             firstRedirectIndex = min(i, firstRedirectIndex);
         }
+        else if (strcmp(args[i], "1>>") == 0 || strcmp(args[i], ">>") == 0)
+        {
+            if (args[i + 1] == NULL)
+            {
+                fprintf(stderr, "syntax error after %s\n", args[i]);
+                return false;
+            }
+            *out = fopen(args[i + 1], "a");
+            firstRedirectIndex = min(i, firstRedirectIndex);
+        }
         else if (strcmp(args[i], "2>") == 0)
         {
             if (args[i + 1] == NULL)
