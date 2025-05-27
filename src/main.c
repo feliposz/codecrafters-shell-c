@@ -48,7 +48,7 @@ char *pathLookup(char *name)
     return NULL;
 }
 
-void cmdType(char *arg)
+void cmdType(char *arg, FILE *out, FILE *err)
 {
     char *builtins[] = {
         "exit",
@@ -61,18 +61,18 @@ void cmdType(char *arg)
     {
         if (strcmp(arg, builtins[i]) == 0)
         {
-            printf("%s is a shell builtin\n", arg);
+            fprintf(out, "%s is a shell builtin\n", arg);
             return;
         }
     }
     char *fullPath = pathLookup(arg);
     if (fullPath != NULL)
     {
-        printf("%s is %s\n", arg, fullPath);
+        fprintf(out, "%s is %s\n", arg, fullPath);
         free(fullPath);
         return;
     }
-    printf("%s: not found\n", arg);
+    fprintf(err, "%s: not found\n", arg);
 }
 
 char **splitCommandLine(char *input)
@@ -96,7 +96,7 @@ char **splitCommandLine(char *input)
             }
             if (cur[0] == '\0')
             {
-                printf("unmatched '\n");
+                fprintf(stderr, "unmatched '\n");
                 return NULL;
             }
             cur++; // closing '
@@ -119,7 +119,7 @@ char **splitCommandLine(char *input)
             }
             if (cur[0] == '\0')
             {
-                printf("unmatched \"\n");
+                fprintf(stderr, "unmatched \"\n");
                 return NULL;
             }
             cur++; // closing '
@@ -209,8 +209,16 @@ void runCmd(char *cmd, char **args)
     }
 }
 
+void handleRedirection(char **args, FILE **out, FILE **err)
+{
+    *out = stdout;
+    *err = stderr;
+}
+
 void handleCmd(char *cmd, char **args)
 {
+    FILE *out, *err;
+    handleRedirection(args, &out, &err);
     if (strcmp(cmd, "exit") == 0)
     {
         exit(EXIT_SUCCESS);
@@ -219,22 +227,22 @@ void handleCmd(char *cmd, char **args)
     {
         for (int i = 1; args[i] != NULL; i++)
         {
-            printf("%s ", args[i]);
+            fprintf(out, "%s ", args[i]);
         }
-        printf("\n");
+        fprintf(out, "\n");
     }
     else if (strcmp(cmd, "type") == 0)
     {
         if (args[1] != NULL)
         {
-            cmdType(args[1]);
+            cmdType(args[1], out, err);
         }
     }
     else if (strcmp(cmd, "pwd") == 0)
     {
         char currentDir[MAX_PATH_LENGTH];
         getcwd(currentDir, MAX_PATH_LENGTH);
-        printf("%s\n", currentDir);
+        fprintf(out, "%s\n", currentDir);
     }
     else if (strcmp(cmd, "cd") == 0)
     {
@@ -248,7 +256,7 @@ void handleCmd(char *cmd, char **args)
             }
             if (chdir(path) != 0)
             {
-                printf("cd: %s: %s\n", path, strerror(errno));
+                fprintf(err, "cd: %s: %s\n", path, strerror(errno));
             }
         }
     }
@@ -262,9 +270,10 @@ void handleCmd(char *cmd, char **args)
         }
         else
         {
-            printf("%s: command not found\n", cmd);
+            fprintf(err, "%s: command not found\n", cmd);
         }
     }
+    freeArrayAndElements(args);
 }
 
 int main(int argc, char *argv[])
@@ -282,17 +291,11 @@ int main(int argc, char *argv[])
             break;
         }
         char **args = splitCommandLine(input);
-        if (args == NULL)
+        if (args == NULL || strlen(args[0]) == 0)
         {
             continue;
         }
-        char *cmd = args[0];
-        if (strlen(cmd) == 0)
-        {
-            continue;
-        }
-        handleCmd(cmd, args);
-        freeArrayAndElements(args);
+        handleCmd(args[0], args);
     }
     return 0;
 }
