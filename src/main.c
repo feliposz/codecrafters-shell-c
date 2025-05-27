@@ -190,11 +190,24 @@ void freeArrayAndElements(char **array)
     free(array);
 }
 
-void runCmd(char *cmd, char **args)
+void childRedir(FILE *stream, int fd)
+{
+    if (stream == stdin || stream == stdout || stream == stderr)
+    {
+        return;
+    }
+    int fdOfStream = fileno(stream);
+    dup2(fdOfStream, fd);
+    close(fdOfStream);
+}
+
+void runCmd(char *cmd, char **args, FILE *out, FILE *err)
 {
     int pid = fork();
     if (pid == 0)
     {
+        childRedir(out, 1);
+        childRedir(err, 2);
         execv(cmd, args);
         perror("execv");
         _exit(EXIT_FAILURE); // child should not return
@@ -297,7 +310,7 @@ void handleCmd(char *cmd, char **args)
         char *fullPath = pathLookup(cmd);
         if (fullPath != NULL)
         {
-            runCmd(fullPath, args);
+            runCmd(fullPath, args, out, err);
             free(fullPath);
         }
         else
