@@ -116,6 +116,11 @@ char **splitCommandLine(char *input)
             }
             cur++; // closing '
         }
+        else if (cur[0] == '\\')
+        {
+            token[length++] = cur[1];
+            cur+=2;
+        }
         else if (!isspace(cur[0]) && cur[0] != '\0')
         {
             token[length++] = cur[0];
@@ -216,6 +221,10 @@ int main(int argc, char *argv[])
             continue;
         }
         char *cmd = args[0];
+        if (strlen(cmd) == 0)
+        {
+            continue;
+        }
         // for (int i = 0; args[i] != NULL; i++)
         // {
         //     printf("%d: %s\n", i, args[i]);
