@@ -106,8 +106,16 @@ char **splitCommandLine(char *input)
             cur++; // opening '
             while (cur[0] != '"' && cur[0] != '\0')
             {
-                token[length++] = cur[0];
-                cur++;
+                if (cur[0] == '\\' && (cur[1] == '\\' || cur[1] == '$' || cur[1] == '"'))
+                {
+                    token[length++] = cur[1];
+                    cur += 2;
+                }
+                else
+                {
+                    token[length++] = cur[0];
+                    cur++;
+                }
             }
             if (cur[0] == '\0')
             {
@@ -119,7 +127,7 @@ char **splitCommandLine(char *input)
         else if (cur[0] == '\\')
         {
             token[length++] = cur[1];
-            cur+=2;
+            cur += 2;
         }
         else if (!isspace(cur[0]) && cur[0] != '\0')
         {
