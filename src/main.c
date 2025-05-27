@@ -209,6 +209,64 @@ void runCmd(char *cmd, char **args)
     }
 }
 
+void handleCmd(char *cmd, char **args)
+{
+    if (strcmp(cmd, "exit") == 0)
+    {
+        exit(EXIT_SUCCESS);
+    }
+    else if (strcmp(cmd, "echo") == 0)
+    {
+        for (int i = 1; args[i] != NULL; i++)
+        {
+            printf("%s ", args[i]);
+        }
+        printf("\n");
+    }
+    else if (strcmp(cmd, "type") == 0)
+    {
+        if (args[1] != NULL)
+        {
+            cmdType(args[1]);
+        }
+    }
+    else if (strcmp(cmd, "pwd") == 0)
+    {
+        char currentDir[MAX_PATH_LENGTH];
+        getcwd(currentDir, MAX_PATH_LENGTH);
+        printf("%s\n", currentDir);
+    }
+    else if (strcmp(cmd, "cd") == 0)
+    {
+        char *path = args[1];
+        if (path != NULL)
+        {
+            if (strcmp("~", path) == 0)
+            {
+                char *envHome = getenv("HOME");
+                path = envHome != NULL ? envHome : path;
+            }
+            if (chdir(path) != 0)
+            {
+                printf("cd: %s: %s\n", path, strerror(errno));
+            }
+        }
+    }
+    else
+    {
+        char *fullPath = pathLookup(cmd);
+        if (fullPath != NULL)
+        {
+            runCmd(fullPath, args);
+            free(fullPath);
+        }
+        else
+        {
+            printf("%s: command not found\n", cmd);
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     // Flush after every printf
@@ -233,64 +291,7 @@ int main(int argc, char *argv[])
         {
             continue;
         }
-        // for (int i = 0; args[i] != NULL; i++)
-        // {
-        //     printf("%d: %s\n", i, args[i]);
-        // }
-        if (strcmp(cmd, "exit") == 0)
-        {
-            break;
-        }
-        else if (strcmp(cmd, "echo") == 0)
-        {
-            for (int i = 1; args[i] != NULL; i++)
-            {
-                printf("%s ", args[i]);
-            }
-            printf("\n");
-        }
-        else if (strcmp(cmd, "type") == 0)
-        {
-            if (args[1] != NULL)
-            {
-                cmdType(args[1]);
-            }
-        }
-        else if (strcmp(cmd, "pwd") == 0)
-        {
-            char currentDir[MAX_PATH_LENGTH];
-            getcwd(currentDir, MAX_PATH_LENGTH);
-            printf("%s\n", currentDir);
-        }
-        else if (strcmp(cmd, "cd") == 0)
-        {
-            char *path = args[1];
-            if (path != NULL)
-            {
-                if (strcmp("~", path) == 0)
-                {
-                    char *envHome = getenv("HOME");
-                    path = envHome != NULL ? envHome : path;
-                }
-                if (chdir(path) != 0)
-                {
-                    printf("cd: %s: %s\n", path, strerror(errno));
-                }
-            }
-        }
-        else
-        {
-            char *fullPath = pathLookup(cmd);
-            if (fullPath != NULL)
-            {
-                runCmd(fullPath, args);
-                free(fullPath);
-            }
-            else
-            {
-                printf("%s: command not found\n", cmd);
-            }
-        }
+        handleCmd(cmd, args);
         freeArrayAndElements(args);
     }
     return 0;
