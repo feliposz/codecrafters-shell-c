@@ -6,10 +6,11 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <limits.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
 #define MAX_PATH_LENGTH 1024
-#define MAX_INPUT 1024
+#define MAX_CMD_INPUT 1024
 
 char *pathLookup(char *name)
 {
@@ -80,7 +81,7 @@ char **splitCommandLine(char *input)
     int count = 0;
     int capacity = 0;
     char **result = NULL;
-    char token[MAX_INPUT];
+    char token[MAX_CMD_INPUT];
     int length = 0;
     char *cur = input;
     for (;;)
@@ -209,16 +210,47 @@ void runCmd(char *cmd, char **args)
     }
 }
 
-void handleRedirection(char **args, FILE **out, FILE **err)
+int min(int a, int b)
 {
-    *out = stdout;
-    *err = stderr;
+    return a < b ? a : b;
+}
+
+bool handleRedirection(char **args, FILE **out, FILE **err)
+{
+    int firstRedirectIndex = INT_MAX;
+    for (int i = 0; args[i] != NULL; i++)
+    {
+        if (strcmp(args[i], "1>") == 0 || strcmp(args[i], ">") == 0)
+        {
+            if (args[i + 1] == NULL)
+            {
+                fprintf(stderr, "syntax error after %s\n", args[i]);
+                return false;
+            }
+            *out = fopen(args[i + 1], "w");
+            firstRedirectIndex = min(i, firstRedirectIndex);
+        }
+    }
+    if (firstRedirectIndex != INT_MAX)
+    {
+        // free rest of array and mark new with null;
+        for (int i = firstRedirectIndex; args[i] != NULL; i++)
+        {
+            free(args[i]);
+        }
+        args[firstRedirectIndex] = NULL;
+    }
+    return true;
 }
 
 void handleCmd(char *cmd, char **args)
 {
-    FILE *out, *err;
-    handleRedirection(args, &out, &err);
+    FILE *out = stdout;
+    FILE *err = stderr;
+    if (!handleRedirection(args, &out, &err))
+    {
+        return;
+    }
     if (strcmp(cmd, "exit") == 0)
     {
         exit(EXIT_SUCCESS);
@@ -273,7 +305,10 @@ void handleCmd(char *cmd, char **args)
             fprintf(err, "%s: command not found\n", cmd);
         }
     }
-    freeArrayAndElements(args);
+    if (out != stdout)
+    {
+        fclose(out);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -281,11 +316,11 @@ int main(int argc, char *argv[])
     // Flush after every printf
     setbuf(stdout, NULL);
 
-    char input[MAX_INPUT];
+    char input[MAX_CMD_INPUT];
     for (;;)
     {
         printf("$ ");
-        fgets(input, MAX_INPUT, stdin);
+        fgets(input, MAX_CMD_INPUT, stdin);
         if (feof(stdin))
         {
             break;
@@ -296,6 +331,7 @@ int main(int argc, char *argv[])
             continue;
         }
         handleCmd(args[0], args);
+        freeArrayAndElements(args);
     }
     return 0;
 }
