@@ -13,6 +13,14 @@
 #define MAX_PATH_LENGTH 1024
 #define MAX_CMD_INPUT 1024
 
+char *builtins[] = {
+    "exit",
+    "echo",
+    "type",
+    "pwd",
+    "cd",
+};
+
 char *pathLookup(char *name)
 {
     char fullPath[MAX_PATH_LENGTH];
@@ -52,13 +60,6 @@ char *pathLookup(char *name)
 
 void cmdType(char *arg, FILE *out, FILE *err)
 {
-    char *builtins[] = {
-        "exit",
-        "echo",
-        "type",
-        "pwd",
-        "cd",
-    };
     for (int i = 0; i < ARRAY_LENGTH(builtins); i++)
     {
         if (strcmp(arg, builtins[i]) == 0)
@@ -355,11 +356,30 @@ void handleCmd(char *cmd, char **args)
     }
 }
 
+char *completion_entry(const char *text, int state)
+{
+    static int index, length;
+    if (state == 0)
+    {
+        index = 0;
+        length = strlen(text);
+    }
+    while (index < ARRAY_LENGTH(builtins))
+    {
+        int current = index++;
+        if (strncmp(builtins[current], text, length) == 0)
+        {
+            return strdup(builtins[current]);
+        }
+    }
+    return NULL;
+}
+
 int main(int argc, char *argv[])
 {
     // Flush after every printf
     setbuf(stdout, NULL);
-    
+    rl_completion_entry_function = completion_entry;
     for (;;)
     {
         char *input = readline("$ ");
