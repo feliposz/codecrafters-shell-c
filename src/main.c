@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <limits.h>
+#include <readline/readline.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
 #define MAX_PATH_LENGTH 1024
@@ -358,13 +359,11 @@ int main(int argc, char *argv[])
 {
     // Flush after every printf
     setbuf(stdout, NULL);
-
-    char input[MAX_CMD_INPUT];
+    
     for (;;)
     {
-        printf("$ ");
-        fgets(input, MAX_CMD_INPUT, stdin);
-        if (feof(stdin))
+        char *input = readline("$ ");
+        if (input == NULL)
         {
             break;
         }
@@ -375,6 +374,7 @@ int main(int argc, char *argv[])
         }
         handleCmd(args[0], args);
         freeArrayAndElements(args);
+        free(input);
     }
     return 0;
 }
