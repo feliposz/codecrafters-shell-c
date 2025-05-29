@@ -342,11 +342,24 @@ void handleCmd(char *cmd, char **args)
     }
     else if (strcmp(cmd, "history") == 0)
     {
-        int index = 1;
+        int start = 0;
         HIST_ENTRY **entries = history_list();
-        for (int i = 0; entries[i] != NULL; i++)
+        if (args[1] != NULL)
         {
-            printf("%d %s\n", index++, entries[i]->line);
+            int n = atoi(args[1]);
+            for (int i = 0; entries[i] != NULL; i++)
+            {
+                start++;
+            }
+            start -= n;
+            if (start < 0)
+            {
+                start = 0;
+            }
+        }
+        for (int i = start; entries[i] != NULL; i++)
+        {
+            printf("%d %s\n", i + 1, entries[i]->line);
         }
     }
     else
