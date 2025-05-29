@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <readline/readline.h>
+#include <dirent.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
 #define MAX_PATH_LENGTH 1024
@@ -356,7 +357,11 @@ void handleCmd(char *cmd, char **args)
     }
 }
 
-char *completion_entry(const char *text, int state)
+char **completionEntries = NULL;
+int completionEntriesCount = 0;
+int completionEntriesCapacity = 0;
+
+char *nextCompletionEntryCallback(const char *text, int state)
 {
     static int index, length;
     if (state == 0)
@@ -364,22 +369,143 @@ char *completion_entry(const char *text, int state)
         index = 0;
         length = strlen(text);
     }
-    while (index < ARRAY_LENGTH(builtins))
+    // TODO: since entries are sorted, could possible binary search to find first matching entry
+    while (index < completionEntriesCount)
     {
         int current = index++;
-        if (strncmp(builtins[current], text, length) == 0)
+        if (strncmp(completionEntries[current], text, length) == 0)
         {
-            return strdup(builtins[current]);
+            return strdup(completionEntries[current]);
         }
     }
     return NULL;
+}
+
+void addCompletionEntry(char *name)
+{
+    if (completionEntriesCapacity < completionEntriesCount + 1)
+    {
+        completionEntriesCapacity = completionEntriesCapacity == 0 ? 8 : completionEntriesCapacity * 2;
+        completionEntries = realloc(completionEntries, sizeof(completionEntries[0]) * completionEntriesCapacity);
+        if (completionEntries == NULL)
+        {
+            exit(EXIT_FAILURE);
+        }
+    }
+    char *clone = strdup(name);
+    completionEntries[completionEntriesCount++] = clone;
+}
+
+void freeCompletionEntries()
+{
+    for (int i = 0; i < completionEntriesCount; i++)
+    {
+        free(completionEntries[i]);
+    }
+    free(completionEntries);
+    completionEntriesCount = 0;
+    completionEntriesCapacity = 0;
+    completionEntries = NULL;
+}
+
+int entryCompare(const void *pp1, const void *pp2)
+{
+    char const *s1 = *(const char **)pp1;
+    char const *s2 = *(const char **)pp2;
+    return strcmp(s1, s2);
+}
+
+void printCompletionEntries()
+{
+    for (int i = 0; i < completionEntriesCount; i++)
+    {
+        printf("%d: %s\n", i, completionEntries[i]);
+    }
+}
+
+void removeDuplicateEntries()
+{
+    int writeIndex = 1;
+    for (int readIndex = 1; readIndex < completionEntriesCount; readIndex++)
+    {
+        if (entryCompare(&completionEntries[readIndex], &completionEntries[writeIndex - 1]) != 0)
+        {
+            if (readIndex != writeIndex)
+            {
+                completionEntries[writeIndex] = completionEntries[readIndex];
+            }
+            writeIndex++;
+        }
+        else
+        {
+            free(completionEntries[readIndex]);
+        }
+    }
+    for (int i = writeIndex; i < completionEntriesCount; i++)
+    {
+        completionEntries[i] = NULL;
+    }
+    completionEntriesCount = writeIndex;
+}
+
+void sortCompletionEntries()
+{
+    qsort(completionEntries, completionEntriesCount, sizeof(completionEntries[0]), entryCompare);
+}
+
+void updateCompletionEntries()
+{
+    freeCompletionEntries();
+    char *path = getenv("PATH");
+    if (path == NULL)
+    {
+        return;
+    }
+    for (;;)
+    {
+        char *separator = strchr(path, ':');
+        int pathLen = separator != NULL ? separator - path : strlen(path);
+        if (pathLen == 0)
+        {
+            break;
+        }
+        path[pathLen] = '\0';
+        // printf("Searching path: %s\n", path);
+        DIR *dir = opendir(path);
+        if (dir != NULL)
+        {
+            struct dirent *entry = readdir(dir);
+            while (entry != NULL)
+            {
+                if (access(entry->d_name, X_OK))
+                {
+                    // printf("Executable: %s\n", entry->d_name);
+                    addCompletionEntry(entry->d_name);
+                }
+                entry = readdir(dir);
+            }
+        }
+        closedir(dir);
+        if (separator == NULL)
+        {
+            break;
+        }
+        path = separator + 1;
+    }
+    for (int i = 0; i < ARRAY_LENGTH(builtins); i++)
+    {
+        addCompletionEntry(builtins[i]);
+    }
+    sortCompletionEntries();
+    removeDuplicateEntries();
 }
 
 int main(int argc, char *argv[])
 {
     // Flush after every printf
     setbuf(stdout, NULL);
-    rl_completion_entry_function = completion_entry;
+    updateCompletionEntries();
+    rl_completion_entry_function = nextCompletionEntryCallback;
     for (;;)
     {
         char *input = readline("$ ");
