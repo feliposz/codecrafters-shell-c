@@ -457,6 +457,7 @@ void updateCompletionEntries()
 {
     freeCompletionEntries();
     char *path = getenv("PATH");
+    char pathStr[MAX_PATH_LENGTH];
     if (path == NULL)
     {
         return;
@@ -469,9 +470,9 @@ void updateCompletionEntries()
         {
             break;
         }
-        path[pathLen] = '\0';
+        snprintf(pathStr, MAX_PATH_LENGTH, "%*s", pathLen, path);
         // printf("Searching path: %s\n", path);
-        DIR *dir = opendir(path);
+        DIR *dir = opendir(pathStr);
         if (dir != NULL)
         {
             struct dirent *entry = readdir(dir);
