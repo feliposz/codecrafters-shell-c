@@ -470,19 +470,15 @@ void updateCompletionEntries()
         {
             break;
         }
-        snprintf(pathStr, MAX_PATH_LENGTH, "%*s", pathLen, path);
-        // printf("Searching path: %s\n", path);
+        snprintf(pathStr, MAX_PATH_LENGTH, "%.*s", pathLen, path);
+        // printf("Searching path: %s\n", pathStr);
         DIR *dir = opendir(pathStr);
         if (dir != NULL)
         {
             struct dirent *entry = readdir(dir);
             while (entry != NULL)
             {
-                if (access(entry->d_name, X_OK))
-                {
-                    // printf("Executable: %s\n", entry->d_name);
-                    addCompletionEntry(entry->d_name);
-                }
+                addCompletionEntry(entry->d_name);
                 entry = readdir(dir);
             }
         }
@@ -497,8 +493,8 @@ void updateCompletionEntries()
     {
         addCompletionEntry(builtins[i]);
     }
-    sortCompletionEntries();
-    removeDuplicateEntries();
+    // sortCompletionEntries();
+    // removeDuplicateEntries();
 }
 
 int main(int argc, char *argv[])
