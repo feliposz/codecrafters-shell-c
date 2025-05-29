@@ -15,6 +15,8 @@
 #define MAX_PATH_LENGTH 1024
 #define MAX_CMD_INPUT 1024
 
+bool exitShell = false;
+
 char *builtins[] = {
     "exit",
     "echo",
@@ -301,7 +303,7 @@ void handleCmd(char *cmd, char **args)
     }
     if (strcmp(cmd, "exit") == 0)
     {
-        exit(EXIT_SUCCESS);
+        exitShell = true;
     }
     else if (strcmp(cmd, "echo") == 0)
     {
@@ -378,6 +380,10 @@ void handleCmd(char *cmd, char **args)
     if (out != stdout)
     {
         fclose(out);
+    }
+    if (err != stderr)
+    {
+        fclose(err);
     }
 }
 
@@ -528,7 +534,7 @@ int main(int argc, char *argv[])
     updateCompletionEntries();
     rl_completion_entry_function = nextCompletionEntryCallback;
     using_history();
-    for (;;)
+    while (!exitShell)
     {
         char *input = readline("$ ");
         if (input == NULL)
@@ -545,5 +551,7 @@ int main(int argc, char *argv[])
         freeArrayAndElements(args);
         free(input);
     }
+    clear_history();
+    freeCompletionEntries();
     return 0;
 }
