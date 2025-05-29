@@ -7,8 +7,9 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <limits.h>
-#include <readline/readline.h>
 #include <dirent.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
 #define MAX_PATH_LENGTH 1024
@@ -20,6 +21,7 @@ char *builtins[] = {
     "type",
     "pwd",
     "cd",
+    "history",
 };
 
 char *pathLookup(char *name)
@@ -338,6 +340,15 @@ void handleCmd(char *cmd, char **args)
             }
         }
     }
+    else if (strcmp(cmd, "history") == 0)
+    {
+        int index = 1;
+        HIST_ENTRY **entries = history_list();
+        for (int i = 0; entries[i] != NULL; i++)
+        {
+            printf("%d %s\n", index++, entries[i]->line);
+        }
+    }
     else
     {
         char *fullPath = pathLookup(cmd);
@@ -503,6 +514,7 @@ int main(int argc, char *argv[])
     setbuf(stdout, NULL);
     updateCompletionEntries();
     rl_completion_entry_function = nextCompletionEntryCallback;
+    using_history();
     for (;;)
     {
         char *input = readline("$ ");
@@ -515,6 +527,7 @@ int main(int argc, char *argv[])
         {
             continue;
         }
+        add_history(input);
         handleCmd(args[0], args);
         freeArrayAndElements(args);
         free(input);
