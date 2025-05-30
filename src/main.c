@@ -8,8 +8,38 @@
 #include <errno.h>
 #include <limits.h>
 #include <dirent.h>
+
+#define ENABLE_READLINE
+
+#ifdef ENABLE_READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#else
+
+// dummy definitions for debugging
+
+typedef struct
+{
+    char *line;
+} HIST_ENTRY;
+
+HIST_ENTRY **history_list() { return NULL; }
+void using_history() {}
+void clear_history() {}
+void add_history(char *s) {}
+
+void *rl_completion_entry_function;
+
+char *readline(char *prompt)
+{
+    printf("%s", prompt);
+    size_t len;
+    char *response = NULL;
+    getline(&response, &len, stdin);
+    return response;
+}
+
+#endif
 
 #define ARRAY_LENGTH(array) (sizeof(array) / sizeof(array[0]))
 #define MAX_PATH_LENGTH 1024
@@ -208,11 +238,12 @@ void childRedir(FILE *stream, int fd)
     close(fdOfStream);
 }
 
-void runCmd(char *cmd, char **args, FILE *out, FILE *err)
+void runCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FILE *err)
 {
     int pid = fork();
     if (pid == 0)
     {
+        childRedir(in, 0);
         childRedir(out, 1);
         childRedir(err, 2);
         execv(cmd, args);
@@ -221,8 +252,11 @@ void runCmd(char *cmd, char **args, FILE *out, FILE *err)
     }
     else if (pid > 0)
     {
-        int status;
-        waitpid(pid, &status, WUNTRACED);
+        if (shouldWait)
+        {
+            int status;
+            waitpid(pid, &status, WUNTRACED);
+        }
     }
     else
     {
@@ -293,10 +327,17 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
     return true;
 }
 
-void handleCmd(char *cmd, char **args)
+void safeClose(FILE *file)
 {
-    FILE *out = stdout;
-    FILE *err = stderr;
+    if (file == stdin || file == stdout || file == stderr)
+    {
+        return;
+    }
+    fclose(file);
+}
+
+void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FILE *err)
+{
     if (!handleRedirection(args, &out, &err))
     {
         return;
@@ -369,7 +410,7 @@ void handleCmd(char *cmd, char **args)
         char *fullPath = pathLookup(cmd);
         if (fullPath != NULL)
         {
-            runCmd(fullPath, args, out, err);
+            runCmd(fullPath, args, shouldWait, in, out, err);
             free(fullPath);
         }
         else
@@ -377,14 +418,9 @@ void handleCmd(char *cmd, char **args)
             fprintf(err, "%s: command not found\n", cmd);
         }
     }
-    if (out != stdout)
-    {
-        fclose(out);
-    }
-    if (err != stderr)
-    {
-        fclose(err);
-    }
+    safeClose(in);
+    safeClose(out);
+    safeClose(err);
 }
 
 char **completionEntries = NULL;
@@ -527,6 +563,79 @@ void updateCompletionEntries()
     // removeDuplicateEntries();
 }
 
+typedef struct
+{
+    char **args;
+} CommandArgs;
+
+typedef struct
+{
+    int count;
+    CommandArgs *commands;
+} CommandGroup;
+
+CommandGroup splitPipes(char **args)
+{
+    CommandGroup group = {};
+    int prevPipeIndex = -1;
+    for (int i = 0;; i++)
+    {
+        if (args[i] == NULL || strcmp(args[i], "|") == 0)
+        {
+            group.count++;
+        }
+        if (args[i] == NULL)
+        {
+            break;
+        }
+    }
+    group.commands = malloc(group.count * sizeof(CommandArgs));
+    if (group.commands == NULL)
+    {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+    int cmdIndex = 0;
+    for (int i = 0;; i++)
+    {
+        if (args[i] == NULL || strcmp(args[i], "|") == 0)
+        {
+            if (args[i] != NULL && args[i + 1] == NULL)
+            {
+                fprintf(stderr, "syntax error after %s\n", args[i]);
+                free(group.commands);
+                group.commands = NULL;
+                group.count = 0;
+                break;
+            }
+            CommandArgs *cmd = &group.commands[cmdIndex++];
+            int argCount = i - prevPipeIndex + 1; // NULL terminator
+            int argIndex = 0;
+            cmd->args = malloc(sizeof(char *) * argCount);
+            if (cmd->args == NULL)
+            {
+                perror("malloc");
+                exit(EXIT_FAILURE);
+            }
+            // printf("cmd %d:", cmdIndex - 1);
+            for (int j = prevPipeIndex + 1; j < i; j++)
+            {
+                // printf(" %d:%s", argIndex, args[j]);
+                cmd->args[argIndex++] = strdup(args[j]);
+            }
+            // printf("\n");
+            cmd->args[argIndex++] = NULL;
+            prevPipeIndex = i;
+        }
+        if (args[i] == NULL)
+        {
+            break;
+        }
+    }
+    freeArrayAndElements(args);
+    return group;
+}
+
 int main(int argc, char *argv[])
 {
     // Flush after every printf
@@ -547,8 +656,42 @@ int main(int argc, char *argv[])
             continue;
         }
         add_history(input);
-        handleCmd(args[0], args);
-        freeArrayAndElements(args);
+        CommandGroup group = splitPipes(args);
+        if (group.count == 1)
+        {
+            char **args = group.commands[0].args;
+            handleCmd(args[0], args, true, stdin, stdout, stderr);
+            freeArrayAndElements(args);
+        }
+        else
+        {
+            FILE *input, *output, *prevInput;
+            prevInput = stdin;
+            for (int i = 0; i < group.count; i++)
+            {
+                bool shouldWait = false;
+                if (i < group.count - 1)
+                {
+                    int pipeDescriptors[2];
+                    if (pipe(pipeDescriptors) != 0)
+                    {
+                        perror("pipe");
+                        return EXIT_FAILURE;
+                    }
+                    input = fdopen(pipeDescriptors[0], "r");
+                    output = fdopen(pipeDescriptors[1], "w");
+                }
+                else
+                {
+                    output = stdout;
+                    shouldWait = true;
+                }
+                char **args = group.commands[i].args;
+                handleCmd(args[0], args, shouldWait, prevInput, output, stderr);
+                freeArrayAndElements(args);
+                prevInput = input;
+            }
+        }
         free(input);
     }
     clear_history();

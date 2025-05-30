@@ -3,6 +3,7 @@
         "cstdlib": "c",
         "cerrno": "c",
         "vector": "c",
-        "functional": "c"
+        "functional": "c",
+        "history.h": "c"
     }
 }
