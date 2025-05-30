@@ -123,8 +123,10 @@ char **splitCommandLine(char *input)
     char *cur = input;
     for (;;)
     {
-        bool addToken = false;
-        if (cur[0] == '\'')
+        bool panic = false;
+        switch (cur[0])
+        {
+        case '\'':
         {
             cur++; // opening '
             while (cur[0] != '\'' && cur[0] != '\0')
@@ -135,13 +137,15 @@ char **splitCommandLine(char *input)
             if (cur[0] == '\0')
             {
                 fprintf(stderr, "unmatched '\n");
-                return NULL;
+                panic = true;
+                break;
             }
             cur++; // closing '
+            break;
         }
-        else if (cur[0] == '"')
+        case '"':
         {
-            cur++; // opening '
+            cur++; // opening "
             while (cur[0] != '"' && cur[0] != '\0')
             {
                 if (cur[0] == '\\' && (cur[1] == '\\' || cur[1] == '$' || cur[1] == '"'))
@@ -157,41 +161,58 @@ char **splitCommandLine(char *input)
             }
             if (cur[0] == '\0')
             {
+                panic = true;
                 fprintf(stderr, "unmatched \"\n");
-                return NULL;
+                break;
             }
-            cur++; // closing '
+            cur++; // closing "
+            break;
         }
-        else if (cur[0] == '\\')
+        case '\\':
         {
             token[length++] = cur[1];
             cur += 2;
+            break;
         }
-        else if (!isspace(cur[0]) && cur[0] != '\0')
-        {
-            token[length++] = cur[0];
-            cur++;
+        default:
+            if (!isspace(cur[0]) && cur[0] != '\0')
+            {
+                token[length++] = cur[0];
+                cur++;
+            }
         }
-        if (isspace(cur[0]))
+        if (panic)
         {
-            addToken = true;
+            for (int i = 0; i < count; i++)
+            {
+                free(result[i]);
+            }
+            free(result);
+            return NULL;
+        }
+        // check if reached token boundary
+        if (isspace(cur[0]) || cur[0] == '\0')
+        {
             while (isspace(cur[0]))
             {
                 cur++;
             }
-        }
-        if (addToken || cur[0] == '\0')
-        {
             if (capacity < count + 1)
             {
                 capacity = capacity == 0 ? 8 : capacity * 2;
                 result = realloc(result, sizeof(char *) * capacity);
                 if (result == NULL)
                 {
+                    perror("realloc");
                     exit(EXIT_FAILURE);
                 }
             }
             char *arg = malloc(length + 1);
+            if (arg == NULL)
+            {
+                perror("malloc");
+                exit(EXIT_FAILURE);
+            }
             snprintf(arg, length + 1, "%s", token);
             result[count++] = arg;
             length = 0;
@@ -211,6 +232,7 @@ char **splitCommandLine(char *input)
         result = realloc(result, sizeof(char *) * capacity);
         if (result == NULL)
         {
+            perror("realloc");
             exit(EXIT_FAILURE);
         }
     }
@@ -238,7 +260,16 @@ void childRedir(FILE *stream, int fd)
     close(fdOfStream);
 }
 
-void runCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FILE *err)
+void safeClose(FILE *file)
+{
+    if (file == stdin || file == stdout || file == stderr)
+    {
+        return;
+    }
+    fclose(file);
+}
+
+void callExecutable(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FILE *err)
 {
     int pid = fork();
     if (pid == 0)
@@ -271,6 +302,7 @@ int min(int a, int b)
 
 bool handleRedirection(char **args, FILE **out, FILE **err)
 {
+    // TODO: implement < redirection
     int firstRedirectIndex = INT_MAX;
     for (int i = 0; args[i] != NULL; i++)
     {
@@ -282,6 +314,11 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
                 return false;
             }
             *out = fopen(args[i + 1], "w");
+            if (*out == NULL)
+            {
+                perror("fopen");
+                return false;
+            }
             firstRedirectIndex = min(i, firstRedirectIndex);
         }
         else if (strcmp(args[i], "1>>") == 0 || strcmp(args[i], ">>") == 0)
@@ -292,6 +329,11 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
                 return false;
             }
             *out = fopen(args[i + 1], "a");
+            if (*out == NULL)
+            {
+                perror("fopen");
+                return false;
+            }
             firstRedirectIndex = min(i, firstRedirectIndex);
         }
         else if (strcmp(args[i], "2>") == 0)
@@ -302,6 +344,11 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
                 return false;
             }
             *err = fopen(args[i + 1], "w");
+            if (*err == NULL)
+            {
+                perror("fopen");
+                return false;
+            }
             firstRedirectIndex = min(i, firstRedirectIndex);
         }
         else if (strcmp(args[i], "2>>") == 0)
@@ -312,11 +359,17 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
                 return false;
             }
             *err = fopen(args[i + 1], "a");
+            if (*err == NULL)
+            {
+                perror("fopen");
+                return false;
+            }
             firstRedirectIndex = min(i, firstRedirectIndex);
         }
     }
     if (firstRedirectIndex != INT_MAX)
     {
+        // TODO: consider allocating a copy instead and freeing the original
         // free rest of array and mark new with null;
         for (int i = firstRedirectIndex; args[i] != NULL; i++)
         {
@@ -325,15 +378,6 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
         args[firstRedirectIndex] = NULL;
     }
     return true;
-}
-
-void safeClose(FILE *file)
-{
-    if (file == stdin || file == stdout || file == stderr)
-    {
-        return;
-    }
-    fclose(file);
 }
 
 void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FILE *err)
@@ -374,8 +418,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
         {
             if (strcmp("~", path) == 0)
             {
-                char *envHome = getenv("HOME");
-                path = envHome != NULL ? envHome : path;
+                path = getenv("HOME");
             }
             if (chdir(path) != 0)
             {
@@ -410,7 +453,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
         char *fullPath = pathLookup(cmd);
         if (fullPath != NULL)
         {
-            runCmd(fullPath, args, shouldWait, in, out, err);
+            callExecutable(fullPath, args, shouldWait, in, out, err);
             free(fullPath);
         }
         else
@@ -491,6 +534,7 @@ void printCompletionEntries()
 
 void removeDuplicateEntries()
 {
+    // BUG: test this more thoroughly
     int writeIndex = 1;
     for (int readIndex = 1; readIndex < completionEntriesCount; readIndex++)
     {
@@ -547,8 +591,8 @@ void updateCompletionEntries()
                 addCompletionEntry(entry->d_name);
                 entry = readdir(dir);
             }
+            closedir(dir);
         }
-        closedir(dir);
         if (separator == NULL)
         {
             break;
@@ -559,6 +603,7 @@ void updateCompletionEntries()
     {
         addCompletionEntry(builtins[i]);
     }
+    // TODO: test these thoroughly and re-enable them
     // sortCompletionEntries();
     // removeDuplicateEntries();
 }
@@ -603,6 +648,11 @@ CommandGroup splitPipes(char **args)
             if (args[i] != NULL && args[i + 1] == NULL)
             {
                 fprintf(stderr, "syntax error after %s\n", args[i]);
+                // cleanup allocated commands and args
+                for (int i = 0; i < group.count; i++)
+                {
+                    freeArrayAndElements(group.commands[i].args);
+                }
                 free(group.commands);
                 group.commands = NULL;
                 group.count = 0;
@@ -651,7 +701,7 @@ int main(int argc, char *argv[])
             break;
         }
         char **args = splitCommandLine(input);
-        if (args == NULL || strlen(args[0]) == 0)
+        if (args == NULL || args[0] == NULL || strlen(args[0]) == 0)
         {
             continue;
         }
