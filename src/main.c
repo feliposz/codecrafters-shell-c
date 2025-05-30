@@ -692,6 +692,7 @@ int main(int argc, char *argv[])
                 prevInput = input;
             }
         }
+        free(group.commands);
         free(input);
     }
     clear_history();
