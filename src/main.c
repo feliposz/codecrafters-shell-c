@@ -350,7 +350,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
     {
         for (int i = 1; args[i] != NULL; i++)
         {
-            fprintf(out, "%s ", args[i]);
+            fprintf(out, "%s%s", i == 1 ? "" : " ", args[i]);
         }
         fprintf(out, "\n");
     }
