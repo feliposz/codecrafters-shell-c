@@ -429,19 +429,17 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
     else if (strcmp(cmd, "history") == 0)
     {
         int start = 0;
-        bool showEntries = true;
+        bool showEntries = false;
         HIST_ENTRY **entries = history_list();
         if (args[1] != NULL)
         {
             if (strcmp(args[1], "-r") == 0)
             {
                 read_history(args[2]);
-                showEntries = false;
             }
             else if (strcmp(args[1], "-w") == 0)
             {
                 write_history(args[2]);
-                showEntries = false;
             }
             else if (strcmp(args[1], "-a") == 0)
             {
@@ -449,21 +447,21 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
                 int commandsToAppend = history_length - commandsAlreadyAppended;
                 append_history(commandsToAppend, args[2]);
                 commandsAlreadyAppended += commandsToAppend;
-                showEntries = false;
             }
             else
             {
                 int n = atoi(args[1]);
-                for (int i = 0; entries[i] != NULL; i++)
-                {
-                    start++;
-                }
-                start -= n;
+                start = history_length - n;
                 if (start < 0)
                 {
                     start = 0;
-                }
+                };
+                showEntries = true;
             }
+        }
+        else
+        {
+            showEntries = true;
         }
         if (showEntries)
         {
