@@ -438,6 +438,11 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
                 read_history(args[2]);
                 showEntries = false;
             }
+            else if (strcmp(args[1], "-w") == 0)
+            {
+                write_history(args[2]);
+                showEntries = false;
+            }
             else
             {
                 int n = atoi(args[1]);
