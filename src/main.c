@@ -429,23 +429,35 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
     else if (strcmp(cmd, "history") == 0)
     {
         int start = 0;
+        bool showEntries = true;
         HIST_ENTRY **entries = history_list();
         if (args[1] != NULL)
         {
-            int n = atoi(args[1]);
-            for (int i = 0; entries[i] != NULL; i++)
+            if (strcmp(args[1], "-r") == 0)
             {
-                start++;
+                read_history(args[2]);
+                showEntries = false;
             }
-            start -= n;
-            if (start < 0)
+            else
             {
-                start = 0;
+                int n = atoi(args[1]);
+                for (int i = 0; entries[i] != NULL; i++)
+                {
+                    start++;
+                }
+                start -= n;
+                if (start < 0)
+                {
+                    start = 0;
+                }
             }
         }
-        for (int i = start; entries[i] != NULL; i++)
+        if (showEntries)
         {
-            printf("%d %s\n", i + 1, entries[i]->line);
+            for (int i = start; entries[i] != NULL; i++)
+            {
+                printf("%d %s\n", i + 1, entries[i]->line);
+            }
         }
     }
     else
@@ -497,16 +509,21 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
     // check if there are leading spaces before first real command
     // TODO: expand this to handle pipes and redirects
     bool isCommandPosition = true;
-    for (int i = 0; i < start; i++) {
-        if (!isspace(rl_line_buffer[i])) {
+    for (int i = 0; i < start; i++)
+    {
+        if (!isspace(rl_line_buffer[i]))
+        {
             isCommandPosition = false;
             break;
         }
     }
 
-    if (isCommandPosition) {
+    if (isCommandPosition)
+    {
         return rl_completion_matches(text, nextCompletionEntryCallback);
-    } else {
+    }
+    else
+    {
         // We are not at the start, let Readline handle filenames
         rl_attempted_completion_over = 0;
         return NULL;
