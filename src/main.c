@@ -443,6 +443,14 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
                 write_history(args[2]);
                 showEntries = false;
             }
+            else if (strcmp(args[1], "-a") == 0)
+            {
+                static int commandsAlreadyAppended = 0;
+                int commandsToAppend = history_length - commandsAlreadyAppended;
+                append_history(commandsToAppend, args[2]);
+                commandsAlreadyAppended += commandsToAppend;
+                showEntries = false;
+            }
             else
             {
                 int n = atoi(args[1]);
