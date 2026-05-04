@@ -493,8 +493,18 @@ char *nextCompletionEntryCallback(const char *text, int state)
 char **attemptedCompletionCallback(const char *text, int start, int end)
 {
     // Prevents default filename completion from firing
-    rl_attempted_completion_over = 1; 
-    if (start == 0) {
+    rl_attempted_completion_over = 1;
+    // check if there are leading spaces before first real command
+    // TODO: expand this to handle pipes and redirects
+    bool isCommandPosition = true;
+    for (int i = 0; i < start; i++) {
+        if (!isspace(rl_line_buffer[i])) {
+            isCommandPosition = false;
+            break;
+        }
+    }
+
+    if (isCommandPosition) {
         return rl_completion_matches(text, nextCompletionEntryCallback);
     } else {
         // We are not at the start, let Readline handle filenames
