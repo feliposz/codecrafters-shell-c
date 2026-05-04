@@ -800,6 +800,9 @@ int main(int argc, char *argv[])
         free(group.commands);
         free(input);
     }
+     if (historyFile) {
+        write_history(historyFile);
+    }
     clear_history();
     freeCompletionEntries();
     return 0;
