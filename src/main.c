@@ -490,6 +490,19 @@ char *nextCompletionEntryCallback(const char *text, int state)
     return NULL;
 }
 
+char **attemptedCompletionCallback(const char *text, int start, int end)
+{
+    // Prevents default filename completion from firing
+    rl_attempted_completion_over = 1; 
+    if (start == 0) {
+        return rl_completion_matches(text, nextCompletionEntryCallback);
+    } else {
+        // We are not at the start, let Readline handle filenames
+        rl_attempted_completion_over = 0;
+        return NULL;
+    }
+}
+
 void addCompletionEntry(char *name)
 {
     if (completionEntriesCapacity < completionEntriesCount + 1)
@@ -691,7 +704,7 @@ int main(int argc, char *argv[])
     // Flush after every printf
     setbuf(stdout, NULL);
     updateCompletionEntries();
-    rl_completion_entry_function = nextCompletionEntryCallback;
+    rl_attempted_completion_function = attemptedCompletionCallback;
     using_history();
     while (!exitShell)
     {
