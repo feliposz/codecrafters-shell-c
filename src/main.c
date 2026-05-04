@@ -73,7 +73,7 @@ char *pathLookup(char *name)
             break;
         }
         int fullPathLen = snprintf(fullPath, MAX_PATH_LENGTH, "%.*s/%s", pathLen, path, name);
-        if (access(fullPath, F_OK) == 0)
+        if (access(fullPath, X_OK | F_OK) == 0)
         {
             char *result = malloc(fullPathLen + 1);
             if (result == NULL)
