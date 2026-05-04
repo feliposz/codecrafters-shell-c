@@ -744,6 +744,10 @@ int main(int argc, char *argv[])
     updateCompletionEntries();
     rl_attempted_completion_function = attemptedCompletionCallback;
     using_history();
+    char *historyFile = getenv("HISTFILE");
+    if (historyFile) {
+        read_history(historyFile);
+    }
     while (!exitShell)
     {
         char *input = readline("$ ");
