@@ -271,7 +271,9 @@ void safeClose(FILE *file)
     fclose(file);
 }
 
-void callExecutable(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FILE *err)
+int jidSequence = 0;
+
+void callExecutable(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
     int pid = fork();
     if (pid == 0)
@@ -285,7 +287,11 @@ void callExecutable(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out
     }
     else if (pid > 0)
     {
-        if (shouldWait)
+        if (isBackground)
+        {
+            printf("[%d] %d\n", ++jidSequence, pid);
+        }
+        else if (shouldWait)
         {
             int status;
             waitpid(pid, &status, WUNTRACED);
@@ -482,7 +488,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
         char *fullPath = pathLookup(cmd);
         if (fullPath != NULL)
         {
-            callExecutable(fullPath, args, shouldWait, in, out, err);
+            callExecutable(fullPath, args, shouldWait, isBackground, in, out, err);
             free(fullPath);
         }
         else
@@ -776,7 +782,6 @@ int main(int argc, char *argv[])
             free(args[argCount - 1]);
             args[argCount - 1] = NULL;
         }
-        printf("[isBackground = %d]\n", isBackground);
 
         CommandGroup group = splitPipes(args);
         if (group.count == 1)
