@@ -54,6 +54,7 @@ char *builtins[] = {
     "pwd",
     "cd",
     "history",
+    "jobs",
 };
 
 char *pathLookup(char *name)
@@ -471,6 +472,9 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
             }
         }
     }
+    else if (strcmp(cmd, "jobs") == 0)
+    {
+    }
     else
     {
         char *fullPath = pathLookup(cmd);
@@ -745,7 +749,8 @@ int main(int argc, char *argv[])
     rl_attempted_completion_function = attemptedCompletionCallback;
     using_history();
     char *historyFile = getenv("HISTFILE");
-    if (historyFile) {
+    if (historyFile)
+    {
         read_history(historyFile);
     }
     while (!exitShell)
@@ -800,7 +805,8 @@ int main(int argc, char *argv[])
         free(group.commands);
         free(input);
     }
-     if (historyFile) {
+    if (historyFile)
+    {
         write_history(historyFile);
     }
     clear_history();
