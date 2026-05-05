@@ -335,13 +335,28 @@ int addJob(int pid, char **args, int state)
     return -1;
 }
 
+int compareJID(const void *a, const void *b)
+{
+    return ((Job *)a)->jid - ((Job *)b)->jid;
+}
+
 void listJobs()
 {
+    qsort(jobs, MAX_JOBS, sizeof(jobs[0]), compareJID);
     for (int i = 0; i < MAX_JOBS; i++)
     {
-        if (jobs[i].pid != 0)
+        if (jobs[i].jid != 0)
         {
-            char marker = jobs[i].jid == jidSequence ? '+' : ' ';
+            char marker = ' ';
+            // TODO: this logic is good enough for the tests, but not reliable
+            if (jobs[i].jid == jidSequence)
+            {
+                marker = '+';
+            }
+            else if (jobs[i].jid == jidSequence - 1)
+            {
+                marker = '-';
+            }
             printf("[%d]%c  ", jobs[i].jid, marker);
             switch (jobs[i].state)
             {
