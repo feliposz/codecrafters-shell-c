@@ -114,7 +114,7 @@ void cmdType(char *arg, FILE *out, FILE *err)
     fprintf(err, "%s: not found\n", arg);
 }
 
-char **splitCommandLine(char *input)
+char **splitCommandLine(char *input, int *pcount)
 {
     int count = 0;
     int capacity = 0;
@@ -237,7 +237,8 @@ char **splitCommandLine(char *input)
             exit(EXIT_FAILURE);
         }
     }
-    result[count++] = NULL;
+    *pcount = count;
+    result[count] = NULL;
     return result;
 }
 
@@ -386,7 +387,7 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
     return true;
 }
 
-void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FILE *err)
+void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
     if (!handleRedirection(args, &out, &err))
     {
@@ -761,17 +762,27 @@ int main(int argc, char *argv[])
         {
             break;
         }
-        char **args = splitCommandLine(input);
+        int argCount;
+        char **args = splitCommandLine(input, &argCount);
         if (args == NULL || args[0] == NULL || strlen(args[0]) == 0)
         {
             continue;
         }
         add_history(input);
+        bool isBackground = false;
+        if (strcmp(args[argCount - 1], "&") == 0)
+        {
+            isBackground = true;
+            free(args[argCount - 1]);
+            args[argCount - 1] = NULL;
+        }
+        printf("[isBackground = %d]\n", isBackground);
+
         CommandGroup group = splitPipes(args);
         if (group.count == 1)
         {
             char **args = group.commands[0].args;
-            handleCmd(args[0], args, true, stdin, stdout, stderr);
+            handleCmd(args[0], args, true, isBackground, stdin, stdout, stderr);
             freeArrayAndElements(args);
         }
         else
@@ -798,7 +809,7 @@ int main(int argc, char *argv[])
                     shouldWait = true;
                 }
                 char **args = group.commands[i].args;
-                handleCmd(args[0], args, shouldWait, prevInput, output, stderr);
+                handleCmd(args[0], args, shouldWait, isBackground, prevInput, output, stderr);
                 freeArrayAndElements(args);
                 prevInput = input;
             }
