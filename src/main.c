@@ -273,6 +273,96 @@ void safeClose(FILE *file)
 
 int jidSequence = 0;
 
+#define JOBSTATE_UNDEF 0
+#define JOBSTATE_FG 1
+#define JOBSTATE_BG 2
+#define JOBSTATE_STOPPED 3
+
+#define MAX_JOBS 16
+
+typedef struct
+{
+    int pid;
+    int jid;
+    int state;
+    char *cmd;
+} Job;
+
+Job jobs[MAX_JOBS];
+
+void initJobs()
+{
+    memset(jobs, 0, sizeof(jobs));
+}
+
+char *rebuildCmdLine(char **args)
+{
+    size_t totalLength = 0;
+    for (int i = 0; args[i] != NULL; i++)
+    {
+        totalLength += strlen(args[i]) + 1; // for space or \0
+    }
+    char *cmd = calloc(totalLength, sizeof(char));
+    if (cmd == NULL)
+    {
+        perror("calloc");
+    }
+    // TODO: very inefficient!
+    for (int i = 0; args[i] != NULL; i++)
+    {
+        if (i > 0)
+        {
+            strcat(cmd, " ");
+        }
+        strcat(cmd, args[i]);
+    }
+    return cmd;
+}
+
+int addJob(int pid, char **args, int state)
+{
+    for (int i = 0; i < MAX_JOBS; i++)
+    {
+        if (jobs[i].pid == 0) // free entry
+        {
+            jobs[i].pid = pid;
+            jobs[i].jid = ++jidSequence;
+            jobs[i].state = state;
+            jobs[i].cmd = rebuildCmdLine(args);
+            return jobs[i].jid;
+        }
+    }
+    return -1;
+}
+
+void listJobs()
+{
+    for (int i = 0; i < MAX_JOBS; i++)
+    {
+        if (jobs[i].pid != 0)
+        {
+            char marker = jobs[i].jid == jidSequence ? '+' : ' ';
+            printf("[%d]%c  ", jobs[i].jid, marker);
+            switch (jobs[i].state)
+            {
+            case JOBSTATE_BG:
+                printf("Running     ");
+                break;
+            case JOBSTATE_FG:
+                printf("Foreground  ");
+                break;
+            case JOBSTATE_STOPPED:
+                printf("Stopped     ");
+                break;
+            default:
+                printf("State#%d     ", jobs[i].state);
+                break;
+            }
+            printf("%s\n", jobs[i].cmd);
+        }
+    }
+}
+
 void callExecutable(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
     int pid = fork();
@@ -289,7 +379,15 @@ void callExecutable(char *cmd, char **args, bool shouldWait, bool isBackground, 
     {
         if (isBackground)
         {
-            printf("[%d] %d\n", ++jidSequence, pid);
+            int jid = addJob(pid, args, JOBSTATE_BG);
+            if (jid < 0)
+            {
+                printf("[DEBUG] MAX_JOBS reached!\n");
+            }
+            else
+            {
+                printf("[%d] %d\n", jid, pid);
+            }
         }
         else if (shouldWait)
         {
@@ -482,6 +580,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
     }
     else if (strcmp(cmd, "jobs") == 0)
     {
+        listJobs();
     }
     else
     {
@@ -768,13 +867,18 @@ int main(int argc, char *argv[])
         {
             break;
         }
+        char *trimmedInput = input;
+        while (isspace(*trimmedInput))
+        {
+            trimmedInput++;
+        }
         int argCount;
-        char **args = splitCommandLine(input, &argCount);
+        char **args = splitCommandLine(trimmedInput, &argCount);
         if (args == NULL || args[0] == NULL || strlen(args[0]) == 0)
         {
             continue;
         }
-        add_history(input);
+        add_history(trimmedInput);
         bool isBackground = false;
         if (strcmp(args[argCount - 1], "&") == 0)
         {
