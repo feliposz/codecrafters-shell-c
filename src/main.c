@@ -301,6 +301,11 @@ int min(int a, int b)
     return a < b ? a : b;
 }
 
+int max(int a, int b)
+{
+    return a > b ? a : b;
+}
+
 bool handleRedirection(char **args, FILE **out, FILE **err)
 {
     // TODO: implement < redirection
@@ -452,11 +457,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, FILE *in, FILE *out, FIL
             else
             {
                 int n = atoi(args[1]);
-                start = history_length - n;
-                if (start < 0)
-                {
-                    start = 0;
-                };
+                start = max(0, history_length - n);
                 showEntries = true;
             }
         }
