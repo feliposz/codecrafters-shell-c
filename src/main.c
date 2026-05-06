@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -8,6 +10,9 @@
 #include <errno.h>
 #include <limits.h>
 #include <dirent.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #define ENABLE_READLINE
 
@@ -277,8 +282,19 @@ int jidSequence = 0;
 #define JOBSTATE_FG 1
 #define JOBSTATE_BG 2
 #define JOBSTATE_STOPPED 3
+#define JOBSTATE_TERMINATED 4
+#define JOBSTATE_DONE 5
 
 #define MAX_JOBS 16
+
+const char *jobStateDescription[] = {
+    "Undefined",
+    "Foreground",
+    "Running",
+    "Stopped",
+    "Terminated",
+    "Done",
+};
 
 typedef struct
 {
@@ -323,7 +339,7 @@ int addJob(int pid, char **args, int state)
 {
     for (int i = 0; i < MAX_JOBS; i++)
     {
-        if (jobs[i].pid == 0) // free entry
+        if (jobs[i].jid == 0) // free entry
         {
             jobs[i].pid = pid;
             jobs[i].jid = ++jidSequence;
@@ -335,54 +351,90 @@ int addJob(int pid, char **args, int state)
     return -1;
 }
 
+void updateJob(int pid, int state)
+{
+    for (int i = 0; i < MAX_JOBS; i++)
+    {
+        if (jobs[i].pid == pid)
+        {
+            jobs[i].state = state;
+            return;
+        }
+    }
+}
+
 int compareJID(const void *a, const void *b)
 {
     return ((Job *)a)->jid - ((Job *)b)->jid;
 }
 
-void listJobs()
+void listAndPurgeJobs(bool onlyFinished)
 {
     qsort(jobs, MAX_JOBS, sizeof(jobs[0]), compareJID);
+    int markCurrJob = 0;
+    int markPrevJob = 0;
+    for (int i = 0; i < MAX_JOBS; i++)
+    {
+        if (jobs[i].jid > markCurrJob)
+        {
+            markPrevJob = markCurrJob;
+            markCurrJob = jobs[i].jid;
+        }
+    }
     for (int i = 0; i < MAX_JOBS; i++)
     {
         if (jobs[i].jid != 0)
         {
+            if (onlyFinished && jobs[i].state != JOBSTATE_TERMINATED && jobs[i].state != JOBSTATE_DONE)
+            {
+                continue;
+            }
             char marker = ' ';
             // TODO: this logic is good enough for the tests, but not reliable
-            if (jobs[i].jid == jidSequence)
+            if (jobs[i].jid == markCurrJob)
             {
                 marker = '+';
             }
-            else if (jobs[i].jid == jidSequence - 1)
+            else if (jobs[i].jid == markPrevJob)
             {
                 marker = '-';
             }
-            printf("[%d]%c  ", jobs[i].jid, marker);
-            switch (jobs[i].state)
+            printf("[%d]%c  %-12s %s\n", jobs[i].jid, marker, jobStateDescription[jobs[i].state], jobs[i].cmd);
+            if (jobs[i].state == JOBSTATE_TERMINATED || jobs[i].state == JOBSTATE_DONE)
             {
-            case JOBSTATE_BG:
-                printf("Running     ");
-                break;
-            case JOBSTATE_FG:
-                printf("Foreground  ");
-                break;
-            case JOBSTATE_STOPPED:
-                printf("Stopped     ");
-                break;
-            default:
-                printf("State#%d     ", jobs[i].state);
-                break;
+                jobs[i].jid = 0;
+                free(jobs[i].cmd);
+                jobs[i].cmd = NULL;
             }
-            printf("%s\n", jobs[i].cmd);
         }
+    }
+    int maxActiveJob = 0;
+    for (int i = 0; i < MAX_JOBS; i++)
+    {
+        if (maxActiveJob < jobs[i].jid)
+        {
+            maxActiveJob = jobs[i].jid;
+        }
+    }
+    if (jidSequence > maxActiveJob)
+    {
+        jidSequence = maxActiveJob;
     }
 }
 
 void callExecutable(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
+    // block SIGCHLD before forking
+    sigset_t mask, prev;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGCHLD);
+    sigprocmask(SIG_BLOCK, &mask, &prev);
+
     int pid = fork();
     if (pid == 0)
     {
+        // reset mask for child process
+        sigprocmask(SIG_SETMASK, &prev, NULL);
         childRedir(in, 0);
         childRedir(out, 1);
         childRedir(err, 2);
@@ -392,6 +444,7 @@ void callExecutable(char *cmd, char **args, bool shouldWait, bool isBackground, 
     }
     else if (pid > 0)
     {
+        sigprocmask(SIG_SETMASK, &prev, NULL);
         if (isBackground)
         {
             int jid = addJob(pid, args, JOBSTATE_BG);
@@ -595,7 +648,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
     }
     else if (strcmp(cmd, "jobs") == 0)
     {
-        listJobs();
+        listAndPurgeJobs(false);
     }
     else
     {
@@ -863,10 +916,49 @@ CommandGroup splitPipes(char **args)
     return group;
 }
 
+void handleSigchld(int sig)
+{
+    pid_t pid;
+    int status;
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0)
+    {
+        if (WIFSIGNALED(status))
+        {
+            int signal = WTERMSIG(status);
+            updateJob(pid, JOBSTATE_TERMINATED);
+        }
+        else if (WIFEXITED(status))
+        {
+            updateJob(pid, JOBSTATE_DONE);
+        }
+        else if (WIFSTOPPED(status))
+        {
+            int signal = WSTOPSIG(status);
+            updateJob(pid, JOBSTATE_STOPPED);
+        }
+    }
+}
+
+// Signal - wrapper for the sigaction function
+typedef void handler_t(int);
+handler_t *Signal(int signum, handler_t *handler)
+{
+    struct sigaction action, old_action;
+
+    action.sa_handler = handler;
+    sigemptyset(&action.sa_mask); // block sigs of type being handled
+    action.sa_flags = SA_RESTART; // restart syscalls if possible
+
+    if (sigaction(signum, &action, &old_action) < 0)
+        perror("sigaction");
+    return (old_action.sa_handler);
+}
+
 int main(int argc, char *argv[])
 {
     // Flush after every printf
     setbuf(stdout, NULL);
+
     updateCompletionEntries();
     rl_attempted_completion_function = attemptedCompletionCallback;
     using_history();
@@ -875,8 +967,13 @@ int main(int argc, char *argv[])
     {
         read_history(historyFile);
     }
+
+    Signal(SIGCHLD, handleSigchld); // Terminated or stopped child
+
     while (!exitShell)
     {
+        listAndPurgeJobs(true);
+
         char *input = readline("$ ");
         if (input == NULL)
         {
