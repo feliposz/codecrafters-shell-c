@@ -653,7 +653,10 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
     }
     else if (strcmp(cmd, "declare") == 0)
     {
-        // TODO
+        if (strcmp(args[1], "-p") == 0)
+        {
+            printf("declare: %s: not found\n", args[2]);
+        }
     }
     else
     {
