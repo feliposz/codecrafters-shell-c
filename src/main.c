@@ -60,6 +60,7 @@ char *builtins[] = {
     "cd",
     "history",
     "jobs",
+    "declare",
 };
 
 char *pathLookup(char *name)
@@ -649,6 +650,10 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
     else if (strcmp(cmd, "jobs") == 0)
     {
         listAndPurgeJobs(false);
+    }
+    else if (strcmp(cmd, "declare") == 0)
+    {
+        // TODO
     }
     else
     {
