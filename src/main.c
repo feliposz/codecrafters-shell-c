@@ -560,6 +560,71 @@ bool handleRedirection(char **args, FILE **out, FILE **err)
     return true;
 }
 
+// TODO: turn this into a hashmap
+
+typedef struct
+{
+    char *name;
+    char *value;
+} Variable;
+
+#define MAX_VARIABLES 32
+Variable variables[MAX_VARIABLES];
+
+void initVariables()
+{
+    memset(variables, 0, sizeof(variables));
+}
+
+void freeVariables()
+{
+    for (int i = 0; i < MAX_VARIABLES; i++)
+    {
+        free(variables[i].value);
+        free(variables[i].name);
+    }
+}
+
+bool variableGet(char *name, char **pvalue)
+{
+    *pvalue = NULL;
+    for (int i = 0; i < MAX_VARIABLES; i++)
+    {
+        if (variables[i].name != NULL && strcmp(name, variables[i].name) == 0)
+        {
+            *pvalue = variables[i].value;
+            return true;
+        }
+    }
+    return false;
+}
+
+void variableSet(char *name, char *value)
+{
+    int firstFree = -1;
+    for (int i = 0; i < MAX_VARIABLES; i++)
+    {
+        if (variables[i].name != NULL && strcmp(name, variables[i].name) == 0)
+        {
+            // free the old value and update
+            free(variables[i].value);
+            variables[i].value = strdup(value);
+            return;
+        }
+        else if (variables[i].name == NULL && firstFree < 0)
+        {
+            firstFree = i;
+        }
+    }
+    if (firstFree < 0)
+    {
+        fprintf(stderr, "Reached maximum number of declared variables!\n");
+        exit(EXIT_FAILURE);
+    }
+    variables[firstFree].name = strdup(name);
+    variables[firstFree].value = strdup(value);
+}
+
 void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
     if (!handleRedirection(args, &out, &err))
@@ -657,8 +722,22 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
         {
             for (int i = 2; args[i] != NULL; i++)
             {
-                // TODO: try to get variable value
-                printf("declare: %s: not found\n", args[i]);
+                char *value;
+                if (variableGet(args[i], &value))
+                {
+                    if (value == NULL)
+                    {
+                        printf("declare -- %s=\n", args[i]);
+                    }
+                    else
+                    {
+                        printf("declare -- %s=\"%s\"\n", args[i], value);
+                    }
+                }
+                else
+                {
+                    printf("declare: %s: not found\n", args[i]);
+                }
             }
         }
         else
@@ -673,9 +752,7 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
                     *value = '\0';
                     value++;
                 }
-                printf("[DEBUG] name='%s' value='%s'\n", name, value ? value : "(null)");
-
-                // TODO: set variable
+                variableSet(name, value);
             }
         }
     }
@@ -999,6 +1076,8 @@ int main(int argc, char *argv[])
 
     Signal(SIGCHLD, handleSigchld); // Terminated or stopped child
 
+    initVariables();
+
     while (!exitShell)
     {
         listAndPurgeJobs(true);
@@ -1073,5 +1152,6 @@ int main(int argc, char *argv[])
     }
     clear_history();
     freeCompletionEntries();
+    freeVariables();
     return 0;
 }
