@@ -655,7 +655,28 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
     {
         if (strcmp(args[1], "-p") == 0)
         {
-            printf("declare: %s: not found\n", args[2]);
+            for (int i = 2; args[i] != NULL; i++)
+            {
+                // TODO: try to get variable value
+                printf("declare: %s: not found\n", args[i]);
+            }
+        }
+        else
+        {
+            for (int i = 1; args[i] != NULL; i++)
+            {
+                char *name = args[i];
+                // split name and value
+                char *value = strchr(args[i], '=');
+                if (value != NULL)
+                {
+                    *value = '\0';
+                    value++;
+                }
+                printf("[DEBUG] name='%s' value='%s'\n", name, value ? value : "(null)");
+
+                // TODO: set variable
+            }
         }
     }
     else
