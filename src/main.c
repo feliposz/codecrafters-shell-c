@@ -625,6 +625,23 @@ void variableSet(char *name, char *value)
     variables[firstFree].value = strdup(value);
 }
 
+bool isValidVariableName(char *name)
+{
+    if (!isalpha(name[0]) && name[0] != '_')
+    {
+        return false;
+    }
+    // = is not part of the name, so we stop checking
+    for (int i = 0; name[i] && name[i] != '='; i++)
+    {
+        if (!isalpha(name[i]) && name[i] != '_')
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
     if (!handleRedirection(args, &out, &err))
@@ -745,6 +762,11 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
             for (int i = 1; args[i] != NULL; i++)
             {
                 char *name = args[i];
+                if (!isValidVariableName(name))
+                {
+                    printf("declare: `%s': not a valid identifier\n", name);
+                    continue;
+                }
                 // split name and value
                 char *value = strchr(args[i], '=');
                 if (value != NULL)
