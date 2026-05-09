@@ -634,12 +634,78 @@ bool isValidVariableName(char *name)
     // = is not part of the name, so we stop checking
     for (int i = 0; name[i] && name[i] != '='; i++)
     {
-        if (!isalpha(name[i]) && name[i] != '_')
+        if (!isalnum(name[i]) && name[i] != '_')
         {
             return false;
         }
     }
     return true;
+}
+
+#define MAX_VAR_NAME 128
+char *variableSubstitution(char *input)
+{
+    size_t resultCapacity = strlen(input) * 2;
+    size_t resultSize = 0;
+    char *result = realloc(NULL, resultCapacity);
+    if (result == NULL)
+    {
+        perror("realloc");
+        exit(EXIT_FAILURE);
+    }
+    char varName[MAX_VAR_NAME];
+    for (int i = 0; input[i]; i++)
+    {
+        if (input[i] == '$')
+        {
+            int j = 0;
+            i++; // skip $
+            while (j < MAX_VAR_NAME - 1 && (isalnum(input[i]) || input[i] == '_'))
+            {
+                varName[j++] = input[i++];
+            }
+            i--; // not part of name, must step back
+            if (j >= MAX_VAR_NAME)
+            {
+                printf("variable name too long!\n");
+                exit(EXIT_FAILURE);
+            }
+            varName[j] = '\0';
+            char *varValue;
+            if (variableGet(varName, &varValue) && varValue != NULL)
+            {
+                size_t varValueSize = strlen(varValue);
+                if (resultSize + varValueSize >= resultCapacity - 1)
+                {
+                    resultCapacity *= 2;
+                    result = realloc(result, resultCapacity);
+                    if (result == NULL)
+                    {
+                        perror("realloc");
+                        exit(EXIT_FAILURE);
+                    }
+                }
+                strcpy(&result[resultSize], varValue);
+                resultSize += varValueSize;
+            }
+        }
+        else
+        {
+            if (resultSize + 1 >= resultCapacity - 1)
+            {
+                resultCapacity *= 2;
+                result = realloc(result, resultCapacity);
+                if (result == NULL)
+                {
+                    perror("realloc");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            result[resultSize++] = input[i];
+        }
+    }
+    result[resultSize] = '\0';
+    return result;
 }
 
 void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
@@ -1114,13 +1180,21 @@ int main(int argc, char *argv[])
         {
             trimmedInput++;
         }
+        if (strlen(trimmedInput) > 0)
+        {
+            add_history(trimmedInput);
+        }
+
+        char *substInput = variableSubstitution(trimmedInput);
+        free(input);
+
         int argCount;
-        char **args = splitCommandLine(trimmedInput, &argCount);
+        char **args = splitCommandLine(substInput, &argCount);
+        free(substInput);
         if (args == NULL || args[0] == NULL || strlen(args[0]) == 0)
         {
             continue;
         }
-        add_history(trimmedInput);
         bool isBackground = false;
         if (strcmp(args[argCount - 1], "&") == 0)
         {
@@ -1166,7 +1240,6 @@ int main(int argc, char *argv[])
             }
         }
         free(group.commands);
-        free(input);
     }
     if (historyFile)
     {
