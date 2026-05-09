@@ -660,15 +660,33 @@ char *variableSubstitution(char *input)
         {
             int j = 0;
             i++; // skip $
+            bool expectBraces = input[i] == '{';
+            if (expectBraces)
+            {
+                i++;
+            }
             while (j < MAX_VAR_NAME - 1 && (isalnum(input[i]) || input[i] == '_'))
             {
                 varName[j++] = input[i++];
             }
+            if (expectBraces)
+            {
+                if (input[i] == '}')
+                {
+                    i++;
+                }
+                else
+                {
+                    printf("expected a '}' after variable name\n");
+                    break;
+                }
+            }
             i--; // not part of name, must step back
-            if (j >= MAX_VAR_NAME)
+
+            if (j >= MAX_VAR_NAME - 1)
             {
                 printf("variable name too long!\n");
-                exit(EXIT_FAILURE);
+                break;
             }
             varName[j] = '\0';
             char *varValue;
