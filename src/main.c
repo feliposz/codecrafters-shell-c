@@ -61,6 +61,7 @@ char *builtins[] = {
     "history",
     "jobs",
     "declare",
+    "complete",
 };
 
 char *pathLookup(char *name)
