@@ -727,6 +727,69 @@ char *variableSubstitution(char *input)
     return result;
 }
 
+typedef struct
+{
+    char *path;
+    char *cmd;
+} Completer;
+
+#define MAX_COMPLETERS 32
+Completer completers[MAX_COMPLETERS];
+
+void initCompleters()
+{
+    memset(completers, 0, sizeof(completers));
+}
+
+void freeCompleters()
+{
+    for (int i = 0; i < MAX_COMPLETERS; i++)
+    {
+        free(completers[i].path);
+        free(completers[i].cmd);
+    }
+}
+
+bool completerGet(char *cmd, char **ppath)
+{
+    *ppath = NULL;
+    for (int i = 0; i < MAX_COMPLETERS; i++)
+    {
+        if (completers[i].cmd != NULL && strcmp(cmd, completers[i].cmd) == 0)
+        {
+            *ppath = completers[i].path;
+            return true;
+        }
+    }
+    return false;
+}
+
+void completerSet(char *cmd, char *path)
+{
+    int firstFree = -1;
+    for (int i = 0; i < MAX_COMPLETERS; i++)
+    {
+        if (completers[i].cmd != NULL && strcmp(cmd, completers[i].cmd) == 0)
+        {
+            // free the old path and update
+            free(completers[i].path);
+            completers[i].path = strdup(path);
+            return;
+        }
+        else if (completers[i].cmd == NULL && firstFree < 0)
+        {
+            firstFree = i;
+        }
+    }
+    if (firstFree < 0)
+    {
+        fprintf(stderr, "Reached maximum number of completers!\n");
+        exit(EXIT_FAILURE);
+    }
+    completers[firstFree].cmd = strdup(cmd);
+    completers[firstFree].path = strdup(path);
+}
+
 void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
     if (!handleRedirection(args, &out, &err))
@@ -867,7 +930,23 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
     {
         if (strcmp(args[1], "-p") == 0)
         {
-            printf("complete: %s: no completion specification\n", args[2]);
+            for (int i = 2; args[i] != NULL; i++)
+            {
+                char *path;
+                if (completerGet(args[i], &path))
+                {
+                    printf("complete -C '%s' %s\n", path, args[i]);
+                }
+                else
+                {
+                    printf("complete: %s: no completion specification\n", args[i]);
+                }
+            }
+            
+        }
+        else if (strcmp(args[1], "-C") == 0)
+        {
+            completerSet(args[3], args[2]);
         }
     }
     else
