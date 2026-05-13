@@ -863,6 +863,13 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
             }
         }
     }
+    else if (strcmp(cmd, "complete") == 0)
+    {
+        if (strcmp(args[1], "-p") == 0)
+        {
+            printf("complete: %s: no completion specification\n", args[2]);
+        }
+    }
     else
     {
         char *fullPath = pathLookup(cmd);
