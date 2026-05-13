@@ -5,6 +5,7 @@ project(codecrafters-shell)
 file(GLOB_RECURSE SOURCE_FILES src/*.c src/*.h)
 
 set(CMAKE_C_STANDARD 23) # Enable the C23 standard
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(shell ${SOURCE_FILES})
 
