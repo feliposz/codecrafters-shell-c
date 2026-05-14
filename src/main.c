@@ -1032,7 +1032,7 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
         {
             updateScriptCompletion(completerScriptPath, args[0], 
                 argCount > 1 ? args[argCount-1] : "", 
-                argCount > 2 ? args[argCount-2] : "", 
+                argCount >= 2 ? args[argCount-2] : "", 
                 rl_line_buffer,
                 strlen(rl_line_buffer));
             currentCompletion = &scriptCompletion;
@@ -1123,7 +1123,6 @@ void updateScriptCompletion(char *script, char *a1, char *a2, char *a3, char *fu
 {
     freeCompletionEntries(&scriptCompletion);
     char cmd[MAX_CMD_INPUT];
-    // TODO:
     snprintf(cmd, MAX_CMD_INPUT, "env COMP_LINE='%s' COMP_POINT=%d %s %s '%s' '%s'", 
         fullLine, position, script, a1, a2, a3);
     FILE *fp = popen(cmd, "r");
