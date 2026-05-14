@@ -997,7 +997,7 @@ char *nextCompletionEntryCallback(const char *text, int state)
     return NULL;
 }
 
-void updateScriptCompletion(char *, char *, char *, char *);
+void updateScriptCompletion(char *, char *, char *, char *, char *, int);
 
 char **attemptedCompletionCallback(const char *text, int start, int end)
 {
@@ -1024,29 +1024,17 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
     }
     else
     {
-        /*
-        int commandEnd = commandStart;
-        for (int i = commandStart; i < start; i++)
-        {
-            if (isspace(rl_line_buffer[i]))
-            {
-                commandEnd = i;
-                break;
-            }
-        }
-        int commandLength = commandEnd - commandStart;
-
-        char command[MAX_PATH_LENGTH];
-        
-        snprintf(command, commandLength+1, "%s", &rl_line_buffer[commandStart]);
-        */
         int argCount;
         char **args = splitCommandLine(rl_line_buffer, &argCount);
 
         char *completerScriptPath = NULL;
         if (completerGet(args[0], &completerScriptPath))
         {
-            updateScriptCompletion(completerScriptPath, args[0], argCount > 1 ? args[argCount-1] : "", argCount > 2 ? args[argCount-2] : "");
+            updateScriptCompletion(completerScriptPath, args[0], 
+                argCount > 1 ? args[argCount-1] : "", 
+                argCount > 2 ? args[argCount-2] : "", 
+                rl_line_buffer,
+                strlen(rl_line_buffer));
             currentCompletion = &scriptCompletion;
             freeArrayAndElements(args);
             return rl_completion_matches(text, nextCompletionEntryCallback);
@@ -1131,11 +1119,13 @@ void sortCompletionEntries(Completion *completion)
     qsort(completion->entries, completion->count, sizeof(completion->entries[0]), entryCompare);
 }
 
-void updateScriptCompletion(char *script, char *a1, char *a2, char *a3)
+void updateScriptCompletion(char *script, char *a1, char *a2, char *a3, char *fullLine, int position)
 {
     freeCompletionEntries(&scriptCompletion);
     char cmd[MAX_CMD_INPUT];
-    snprintf(cmd, MAX_CMD_INPUT, "%s %s '%s' '%s'", script, a1, a2, a3);
+    // TODO:
+    snprintf(cmd, MAX_CMD_INPUT, "env COMP_LINE='%s' COMP_POINT=%d %s %s '%s' '%s'", 
+        fullLine, position, script, a1, a2, a3);
     FILE *fp = popen(cmd, "r");
     if (!fp)
     {
