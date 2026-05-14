@@ -975,6 +975,7 @@ typedef struct {
 
 Completion *currentCompletion;
 Completion pathCompletion = {};
+Completion scriptCompletion = {};
 
 char *nextCompletionEntryCallback(const char *text, int state)
 {
@@ -996,6 +997,8 @@ char *nextCompletionEntryCallback(const char *text, int state)
     return NULL;
 }
 
+void updateScriptCompletion(char *);
+
 char **attemptedCompletionCallback(const char *text, int start, int end)
 {
     // Prevents default filename completion from firing
@@ -1003,10 +1006,12 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
     // check if there are leading spaces before first real command
     // TODO: expand this to handle pipes and redirects
     bool isCommandPosition = true;
+    int commandStart = 0;
     for (int i = 0; i < start; i++)
     {
         if (!isspace(rl_line_buffer[i]))
         {
+            commandStart = i;
             isCommandPosition = false;
             break;
         }
@@ -1014,10 +1019,33 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
 
     if (isCommandPosition)
     {
+        currentCompletion = &pathCompletion;
         return rl_completion_matches(text, nextCompletionEntryCallback);
     }
     else
     {
+        int commandEnd = commandStart;
+        for (int i = commandStart; i < start; i++)
+        {
+            if (isspace(rl_line_buffer[i]))
+            {
+                commandEnd = i;
+                break;
+            }
+        }
+        int commandLength = commandEnd - commandStart;
+
+        char command[MAX_PATH_LENGTH];
+        char *completerScriptPath = NULL;
+        snprintf(command, commandLength+1, "%s", &rl_line_buffer[commandStart]);
+
+        if (completerGet(command, &completerScriptPath))
+        {
+            updateScriptCompletion(completerScriptPath);
+            currentCompletion = &scriptCompletion;
+            return rl_completion_matches(text, nextCompletionEntryCallback);
+        }
+
         // We are not at the start, let Readline handle filenames
         rl_attempted_completion_over = 0;
         return NULL;
@@ -1095,6 +1123,23 @@ void removeDuplicateEntries(Completion *completion)
 void sortCompletionEntries(Completion *completion)
 {
     qsort(completion->entries, completion->count, sizeof(completion->entries[0]), entryCompare);
+}
+
+void updateScriptCompletion(char *script)
+{
+    freeCompletionEntries(&scriptCompletion);
+    FILE *fp = popen(script, "r");
+    if (!fp)
+    {
+        perror("popen");
+        exit(EXIT_FAILURE);
+    }
+    char buf[MAX_CMD_INPUT];
+    while (fgets(buf, MAX_CMD_INPUT, fp) != NULL) {
+        buf[strcspn(buf, "\n")] = '\0';
+        addCompletionEntry(&scriptCompletion, buf);
+    }
+    pclose(fp);
 }
 
 void updatePathCompletion()
@@ -1359,6 +1404,7 @@ int main(int argc, char *argv[])
     }
     clear_history();
     freeCompletionEntries(&pathCompletion);
+    freeCompletionEntries(&scriptCompletion);
     freeVariables();
     freeCompleters();
     return 0;
