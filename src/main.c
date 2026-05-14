@@ -997,7 +997,7 @@ char *nextCompletionEntryCallback(const char *text, int state)
     return NULL;
 }
 
-void updateScriptCompletion(char *);
+void updateScriptCompletion(char *, char *, char *, char *);
 
 char **attemptedCompletionCallback(const char *text, int start, int end)
 {
@@ -1024,6 +1024,7 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
     }
     else
     {
+        /*
         int commandEnd = commandStart;
         for (int i = commandStart; i < start; i++)
         {
@@ -1036,16 +1037,21 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
         int commandLength = commandEnd - commandStart;
 
         char command[MAX_PATH_LENGTH];
-        char *completerScriptPath = NULL;
+        
         snprintf(command, commandLength+1, "%s", &rl_line_buffer[commandStart]);
+        */
+        int argCount;
+        char **args = splitCommandLine(rl_line_buffer, &argCount);
 
-        if (completerGet(command, &completerScriptPath))
+        char *completerScriptPath = NULL;
+        if (completerGet(args[0], &completerScriptPath))
         {
-            updateScriptCompletion(completerScriptPath);
+            updateScriptCompletion(completerScriptPath, args[0], argCount > 1 ? args[argCount-1] : "", argCount > 2 ? args[argCount-2] : "");
             currentCompletion = &scriptCompletion;
+            freeArrayAndElements(args);
             return rl_completion_matches(text, nextCompletionEntryCallback);
         }
-
+        freeArrayAndElements(args);
         // We are not at the start, let Readline handle filenames
         rl_attempted_completion_over = 0;
         return NULL;
@@ -1125,10 +1131,12 @@ void sortCompletionEntries(Completion *completion)
     qsort(completion->entries, completion->count, sizeof(completion->entries[0]), entryCompare);
 }
 
-void updateScriptCompletion(char *script)
+void updateScriptCompletion(char *script, char *a1, char *a2, char *a3)
 {
     freeCompletionEntries(&scriptCompletion);
-    FILE *fp = popen(script, "r");
+    char cmd[MAX_CMD_INPUT];
+    snprintf(cmd, MAX_CMD_INPUT, "%s %s '%s' '%s'", script, a1, a2, a3);
+    FILE *fp = popen(cmd, "r");
     if (!fp)
     {
         perror("popen");
