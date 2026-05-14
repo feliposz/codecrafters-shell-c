@@ -967,9 +967,13 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
     safeClose(err);
 }
 
-char **completionEntries = NULL;
-int completionEntriesCount = 0;
-int completionEntriesCapacity = 0;
+typedef struct {
+    char **entries;
+    int count;
+    int capacity;
+} Completion;
+
+Completion completion = {};
 
 char *nextCompletionEntryCallback(const char *text, int state)
 {
@@ -980,12 +984,12 @@ char *nextCompletionEntryCallback(const char *text, int state)
         length = strlen(text);
     }
     // TODO: since entries are sorted, could possible binary search to find first matching entry
-    while (index < completionEntriesCount)
+    while (index < completion.count)
     {
         int current = index++;
-        if (strncmp(completionEntries[current], text, length) == 0)
+        if (strncmp(completion.entries[current], text, length) == 0)
         {
-            return strdup(completionEntries[current]);
+            return strdup(completion.entries[current]);
         }
     }
     return NULL;
@@ -1021,29 +1025,29 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
 
 void addCompletionEntry(char *name)
 {
-    if (completionEntriesCapacity < completionEntriesCount + 1)
+    if (completion.capacity < completion.count + 1)
     {
-        completionEntriesCapacity = completionEntriesCapacity == 0 ? 8 : completionEntriesCapacity * 2;
-        completionEntries = realloc(completionEntries, sizeof(completionEntries[0]) * completionEntriesCapacity);
-        if (completionEntries == NULL)
+        completion.capacity = completion.capacity == 0 ? 8 : completion.capacity * 2;
+        completion.entries = realloc(completion.entries, sizeof(completion.entries[0]) * completion.capacity);
+        if (completion.entries == NULL)
         {
             exit(EXIT_FAILURE);
         }
     }
     char *clone = strdup(name);
-    completionEntries[completionEntriesCount++] = clone;
+    completion.entries[completion.count++] = clone;
 }
 
 void freeCompletionEntries()
 {
-    for (int i = 0; i < completionEntriesCount; i++)
+    for (int i = 0; i < completion.count; i++)
     {
-        free(completionEntries[i]);
+        free(completion.entries[i]);
     }
-    free(completionEntries);
-    completionEntriesCount = 0;
-    completionEntriesCapacity = 0;
-    completionEntries = NULL;
+    free(completion.entries);
+    completion.count = 0;
+    completion.capacity = 0;
+    completion.entries = NULL;
 }
 
 int entryCompare(const void *pp1, const void *pp2)
@@ -1055,9 +1059,9 @@ int entryCompare(const void *pp1, const void *pp2)
 
 void printCompletionEntries()
 {
-    for (int i = 0; i < completionEntriesCount; i++)
+    for (int i = 0; i < completion.count; i++)
     {
-        printf("%d: %s\n", i, completionEntries[i]);
+        printf("%d: %s\n", i, completion.entries[i]);
     }
 }
 
@@ -1065,31 +1069,31 @@ void removeDuplicateEntries()
 {
     // BUG: test this more thoroughly
     int writeIndex = 1;
-    for (int readIndex = 1; readIndex < completionEntriesCount; readIndex++)
+    for (int readIndex = 1; readIndex < completion.count; readIndex++)
     {
-        if (entryCompare(&completionEntries[readIndex], &completionEntries[writeIndex - 1]) != 0)
+        if (entryCompare(&completion.entries[readIndex], &completion.entries[writeIndex - 1]) != 0)
         {
             if (readIndex != writeIndex)
             {
-                completionEntries[writeIndex] = completionEntries[readIndex];
+                completion.entries[writeIndex] = completion.entries[readIndex];
             }
             writeIndex++;
         }
         else
         {
-            free(completionEntries[readIndex]);
+            free(completion.entries[readIndex]);
         }
     }
-    for (int i = writeIndex; i < completionEntriesCount; i++)
+    for (int i = writeIndex; i < completion.count; i++)
     {
-        completionEntries[i] = NULL;
+        completion.entries[i] = NULL;
     }
-    completionEntriesCount = writeIndex;
+    completion.count = writeIndex;
 }
 
 void sortCompletionEntries()
 {
-    qsort(completionEntries, completionEntriesCount, sizeof(completionEntries[0]), entryCompare);
+    qsort(completion.entries, completion.count, sizeof(completion.entries[0]), entryCompare);
 }
 
 void updateCompletionEntries()
@@ -1133,7 +1137,7 @@ void updateCompletionEntries()
         addCompletionEntry(builtins[i]);
     }
     // TODO: test these thoroughly and re-enable them
-    // sortCompletionEntries();
+    // sortcompletion.entries();
     // removeDuplicateEntries();
 }
 
