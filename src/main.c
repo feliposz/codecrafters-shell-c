@@ -790,6 +790,21 @@ void completerSet(char *cmd, char *path)
     completers[firstFree].path = strdup(path);
 }
 
+void completerRemove(char *cmd)
+{
+    for (int i = 0; i < MAX_COMPLETERS; i++)
+    {
+        if (completers[i].cmd != NULL && strcmp(cmd, completers[i].cmd) == 0)
+        {
+            free(completers[i].cmd);
+            free(completers[i].path);
+            completers[i].cmd = NULL;
+            completers[i].path = NULL;
+            return;
+        }
+    }
+}
+
 void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE *in, FILE *out, FILE *err)
 {
     if (!handleRedirection(args, &out, &err))
@@ -947,6 +962,10 @@ void handleCmd(char *cmd, char **args, bool shouldWait, bool isBackground, FILE 
         else if (strcmp(args[1], "-C") == 0)
         {
             completerSet(args[3], args[2]);
+        }
+        else if (strcmp(args[1], "-r") == 0)
+        {
+            completerRemove(args[2]);
         }
     }
     else
