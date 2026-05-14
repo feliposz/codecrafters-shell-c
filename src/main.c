@@ -973,7 +973,8 @@ typedef struct {
     int capacity;
 } Completion;
 
-Completion completion = {};
+Completion *currentCompletion;
+Completion pathCompletion = {};
 
 char *nextCompletionEntryCallback(const char *text, int state)
 {
@@ -984,12 +985,12 @@ char *nextCompletionEntryCallback(const char *text, int state)
         length = strlen(text);
     }
     // TODO: since entries are sorted, could possible binary search to find first matching entry
-    while (index < completion.count)
+    while (index < currentCompletion->count)
     {
         int current = index++;
-        if (strncmp(completion.entries[current], text, length) == 0)
+        if (strncmp(currentCompletion->entries[current], text, length) == 0)
         {
-            return strdup(completion.entries[current]);
+            return strdup(currentCompletion->entries[current]);
         }
     }
     return NULL;
@@ -1023,31 +1024,31 @@ char **attemptedCompletionCallback(const char *text, int start, int end)
     }
 }
 
-void addCompletionEntry(char *name)
+void addCompletionEntry(Completion *completion, char *name)
 {
-    if (completion.capacity < completion.count + 1)
+    if (completion->capacity < completion->count + 1)
     {
-        completion.capacity = completion.capacity == 0 ? 8 : completion.capacity * 2;
-        completion.entries = realloc(completion.entries, sizeof(completion.entries[0]) * completion.capacity);
-        if (completion.entries == NULL)
+        completion->capacity = completion->capacity == 0 ? 8 : completion->capacity * 2;
+        completion->entries = realloc(completion->entries, sizeof(completion->entries[0]) * completion->capacity);
+        if (completion->entries == NULL)
         {
             exit(EXIT_FAILURE);
         }
     }
     char *clone = strdup(name);
-    completion.entries[completion.count++] = clone;
+    completion->entries[completion->count++] = clone;
 }
 
-void freeCompletionEntries()
+void freeCompletionEntries(Completion *completion)
 {
-    for (int i = 0; i < completion.count; i++)
+    for (int i = 0; i < completion->count; i++)
     {
-        free(completion.entries[i]);
+        free(completion->entries[i]);
     }
-    free(completion.entries);
-    completion.count = 0;
-    completion.capacity = 0;
-    completion.entries = NULL;
+    free(completion->entries);
+    completion->count = 0;
+    completion->capacity = 0;
+    completion->entries = NULL;
 }
 
 int entryCompare(const void *pp1, const void *pp2)
@@ -1057,48 +1058,48 @@ int entryCompare(const void *pp1, const void *pp2)
     return strcmp(s1, s2);
 }
 
-void printCompletionEntries()
+void printCompletionEntries(Completion *completion)
 {
-    for (int i = 0; i < completion.count; i++)
+    for (int i = 0; i < completion->count; i++)
     {
-        printf("%d: %s\n", i, completion.entries[i]);
+        printf("%d: %s\n", i, completion->entries[i]);
     }
 }
 
-void removeDuplicateEntries()
+void removeDuplicateEntries(Completion *completion)
 {
     // BUG: test this more thoroughly
     int writeIndex = 1;
-    for (int readIndex = 1; readIndex < completion.count; readIndex++)
+    for (int readIndex = 1; readIndex < completion->count; readIndex++)
     {
-        if (entryCompare(&completion.entries[readIndex], &completion.entries[writeIndex - 1]) != 0)
+        if (entryCompare(&completion->entries[readIndex], &completion->entries[writeIndex - 1]) != 0)
         {
             if (readIndex != writeIndex)
             {
-                completion.entries[writeIndex] = completion.entries[readIndex];
+                completion->entries[writeIndex] = completion->entries[readIndex];
             }
             writeIndex++;
         }
         else
         {
-            free(completion.entries[readIndex]);
+            free(completion->entries[readIndex]);
         }
     }
-    for (int i = writeIndex; i < completion.count; i++)
+    for (int i = writeIndex; i < completion->count; i++)
     {
-        completion.entries[i] = NULL;
+        completion->entries[i] = NULL;
     }
-    completion.count = writeIndex;
+    completion->count = writeIndex;
 }
 
-void sortCompletionEntries()
+void sortCompletionEntries(Completion *completion)
 {
-    qsort(completion.entries, completion.count, sizeof(completion.entries[0]), entryCompare);
+    qsort(completion->entries, completion->count, sizeof(completion->entries[0]), entryCompare);
 }
 
-void updateCompletionEntries()
+void updatePathCompletion()
 {
-    freeCompletionEntries();
+    freeCompletionEntries(&pathCompletion);
     char *path = getenv("PATH");
     char pathStr[MAX_PATH_LENGTH];
     if (path == NULL)
@@ -1121,7 +1122,7 @@ void updateCompletionEntries()
             struct dirent *entry = readdir(dir);
             while (entry != NULL)
             {
-                addCompletionEntry(entry->d_name);
+                addCompletionEntry(&pathCompletion, entry->d_name);
                 entry = readdir(dir);
             }
             closedir(dir);
@@ -1134,11 +1135,11 @@ void updateCompletionEntries()
     }
     for (int i = 0; i < ARRAY_LENGTH(builtins); i++)
     {
-        addCompletionEntry(builtins[i]);
+        addCompletionEntry(&pathCompletion, builtins[i]);
     }
     // TODO: test these thoroughly and re-enable them
-    // sortcompletion.entries();
-    // removeDuplicateEntries();
+    // sortCompletionEntries(&pathCompletion);
+    // removeDuplicateEntries(&pathCompletion);
 }
 
 typedef struct
@@ -1262,7 +1263,8 @@ int main(int argc, char *argv[])
     // Flush after every printf
     setbuf(stdout, NULL);
 
-    updateCompletionEntries();
+    currentCompletion = &pathCompletion;
+    updatePathCompletion();
     rl_attempted_completion_function = attemptedCompletionCallback;
     using_history();
     char *historyFile = getenv("HISTFILE");
@@ -1274,6 +1276,7 @@ int main(int argc, char *argv[])
     Signal(SIGCHLD, handleSigchld); // Terminated or stopped child
 
     initVariables();
+    initCompleters();
 
     while (!exitShell)
     {
@@ -1355,7 +1358,8 @@ int main(int argc, char *argv[])
         write_history(historyFile);
     }
     clear_history();
-    freeCompletionEntries();
+    freeCompletionEntries(&pathCompletion);
     freeVariables();
+    freeCompleters();
     return 0;
 }
